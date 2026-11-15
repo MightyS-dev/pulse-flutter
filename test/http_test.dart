@@ -15,7 +15,7 @@ void main() {
       server.listen((request) async {
         expect(request.method, 'POST');
         expect(request.headers.value('X-App-Key'), 'synthetic');
-        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.1');
+        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.2');
         expect(request.headers.value('Content-Encoding'), 'gzip');
         expect(request.headers.contentType?.mimeType, 'application/json');
         expect(request.headers.value('Cookie'), isNull);

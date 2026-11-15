@@ -49,7 +49,7 @@ void main() {
     expect(next.transport.requests, isEmpty);
     await next.runtime.setOptOut(false);
     await next.send('anonymous');
-    expect(next.events.single.containsKey('userHash'), false);
+    expect(next.events.single['userHash'], isNotNull);
   });
   test(
     'corrupt or unreadable preference and failed writes fail closed',

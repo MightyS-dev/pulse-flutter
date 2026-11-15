@@ -8,6 +8,9 @@ class Capture {
   String? _session;
   DateTime? _lastActivity;
   String? userHash;
+
+  /// Hash of the anonymous install id, used while no user is set.
+  String? installHash;
   String sessionAt(DateTime now) {
     if (_lastActivity == null ||
         now.difference(_lastActivity!).inSeconds >= 1800) {
@@ -25,6 +28,7 @@ class Capture {
 
   void reset() {
     userHash = null;
+    installHash = null;
     _session = null;
     _lastActivity = null;
   }

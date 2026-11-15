@@ -52,7 +52,9 @@ class PulseRuntime implements PulseBackend {
   final _waiters = <_FlushWaiter>[];
   Future<void> _tail = Future.value();
   PulseOptions _options = const PulseOptions(debug: false);
-  String? _key, _storageName;
+  static const _installName = 'install-id';
+  static const _systemWait = Duration(seconds: 3);
+  String? _key, _storageName, _processInstall;
   Uri? _endpoint;
   Map<String, String> _system = {};
   bool _optOut = true,
@@ -96,6 +98,46 @@ class PulseRuntime implements PulseBackend {
           _warn('SDK operation failed safely.');
         });
     return _tail;
+  }
+
+  /// Loads or creates the anonymous install id. Never throws; falls back to an
+  /// in-memory id for this process and does not retry writing.
+  Future<void> _ensureInstall() async {
+    if (_capture.installHash != null) {
+      return;
+    }
+    String? id;
+    try {
+      final bytes = await storage.read(_installName);
+      if (bytes != null) {
+        final decoded = utf8.decode(bytes, allowMalformed: true);
+        if (RegExp(r'^[0-9a-f]{32}$').hasMatch(decoded)) {
+          id = decoded;
+        }
+      }
+    } catch (_) {
+      _warn('Install id unreadable; using a process id.');
+    }
+    if (id == null) {
+      id = _processInstall ??= random.token();
+      try {
+        await storage.replace(_installName, utf8.encode(id));
+      } catch (_) {
+        _warn('Install id not saved; using a process id.');
+      }
+    }
+    _processInstall = id;
+    _capture.installHash = hashText(id);
+  }
+
+  Future<void> _forgetInstall() async {
+    _processInstall = null;
+    _capture.installHash = null;
+    try {
+      await storage.remove(_installName);
+    } catch (_) {
+      _warn('Install id could not be removed.');
+    }
   }
 
   Future<void> _readPrivacy() async {
@@ -153,12 +195,7 @@ class PulseRuntime implements PulseBackend {
     _interval = _options.flushIntervalSeconds;
     // The first batch after initialize is due at once; later batches wait.
     _nextFlush = clock.now;
-    try {
-      _system = await environment.system();
-    } catch (_) {
-      _system = {};
-      _warn('Environment unavailable.');
-    }
+    _system = await _lookupSystem();
     for (final field in [
       'platform',
       'osName',
@@ -181,6 +218,37 @@ class PulseRuntime implements PulseBackend {
     _system = _system.map((k, v) => MapEntry(k, _bounded(v)));
     _requestPump();
   });
+
+  /// Waits for the device and app details, but never longer than a few
+  /// seconds: after that the signals go out with what is known.
+  Future<Map<String, String>> _lookupSystem() async {
+    final done = Completer<Map<String, String>>();
+    final timer = scheduler.schedule(_systemWait, () {
+      if (!done.isCompleted) {
+        _warn('Environment slow; continuing without it.');
+        done.complete({});
+      }
+    });
+    unawaited(
+      Future<Map<String, String>>.sync(environment.system).then(
+        (value) {
+          if (!done.isCompleted) {
+            done.complete(Map.of(value));
+          }
+        },
+        onError: (Object _) {
+          if (!done.isCompleted) {
+            _warn('Environment unavailable.');
+            done.complete({});
+          }
+        },
+      ),
+    );
+    final result = await done.future;
+    timer.cancel();
+    return result;
+  }
+
   static String _bounded(String value) {
     if (!validUnicode(value)) {
       return '';
@@ -206,7 +274,11 @@ class PulseRuntime implements PulseBackend {
           _warn('Invalid property ignored.');
         }
       }
-      _enqueue(() {
+      _enqueue(() async {
+        if (_optOut) {
+          return;
+        }
+        await _ensureInstall();
         if (_optOut) {
           return;
         }
@@ -247,7 +319,7 @@ class PulseRuntime implements PulseBackend {
     final json = Signal.encode(
       timestamp: input.timestamp,
       session: input.session,
-      userHash: input.hash,
+      userHash: input.hash ?? _capture.installHash,
       type: input.type,
       value: input.value,
       props: input.props,
@@ -289,6 +361,7 @@ class PulseRuntime implements PulseBackend {
       _queue.clear();
       _before.clear();
       _capture.reset();
+      await _forgetInstall();
       _completeWaiters();
       _generation = random.token();
       _dirty = desired;

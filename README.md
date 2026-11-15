@@ -29,11 +29,11 @@ Future<void> main() async {
 }
 ```
 
-Other calls:
+Users are counted without any setup. Other calls:
 
 ```dart
-Pulse.setUser('internal-account-id'); // optional
-Pulse.setUser(null);                  // clears the user for later signals
+Pulse.setUser('internal-account-id'); // optional: use your own user id instead of the anonymous install id
+Pulse.setUser(null);                  // back to the anonymous install id for later signals
 await Pulse.flush();                  // waits until queued signals are delivered
 ```
 
@@ -45,9 +45,15 @@ Sent with every signal: your signal name, optional number and properties, a UTC 
 
 Sessions use a random 128-bit id that changes after 30 minutes of inactivity.
 
-User id: optional. If you call `setUser`, the id is hashed with SHA-256 on the device. The raw id is never stored or sent. The hash is pseudonymous and may still count as personal data. Without `setUser`, no user hash is sent.
+Anonymous install id: random, created by the SDK on first launch (16 random bytes from the platform's secure random generator) and stored only in the app's own storage, next to the offline queue. It is deleted with the app and replaced after opt-out. It is sent only as a SHA-256 hash, is not derived from any device identifier and is not shared between apps. Nothing needs to be set up for it.
+
+User id: optional. If you call `setUser`, the hash of your id is sent instead of the install id hash. The id is hashed with SHA-256 on the device and the raw id is never stored or sent. The hash is pseudonymous and may still count as personal data. `setUser(null)` returns to the install id hash.
+
+If the install id cannot be read or written, the SDK uses a random id kept in memory for that run.
 
 Never sent: advertising ids, IDFV, Android ids, serial numbers, device names, host names, user names, location, contacts, cookies or signing certificate hashes.
+
+Web: the package does nothing on Flutter web. It stores no install id, sets no cookies and sends no signals there.
 
 IP address: the SDK does not read or send the device's IP address as data. As with any HTTP request, the server sees the connection address, uses it only to derive a two-letter country code and does not store it.
 

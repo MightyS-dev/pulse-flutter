@@ -8,10 +8,11 @@ import 'package:mightys_pulse/src/platform/compression.dart';
 class FakeStorage implements PulseStorage {
   final files = <String, List<int>>{};
   bool failReads = false, failWrites = false;
+  final failing = <String>{};
   Future<void> Function(String)? afterReplace;
   @override
   Future<List<int>?> read(String name) async {
-    if (failReads) {
+    if (failReads || failing.contains(name)) {
       throw StateError('read');
     }
     return files[name] == null ? null : List.of(files[name]!);
@@ -19,7 +20,7 @@ class FakeStorage implements PulseStorage {
 
   @override
   Future<void> replace(String name, List<int> bytes) async {
-    if (failWrites) {
+    if (failWrites || failing.contains(name)) {
       throw StateError('write');
     }
     files[name] = List.of(bytes);
@@ -28,7 +29,7 @@ class FakeStorage implements PulseStorage {
 
   @override
   Future<void> remove(String name) async {
-    if (failWrites) {
+    if (failWrites || failing.contains(name)) {
       throw StateError('remove');
     }
     files.remove(name);
@@ -83,8 +84,17 @@ class FakeRandom implements PulseRandom {
 }
 
 class FakeEnvironment implements PulseEnvironment {
+  FakeEnvironment({this.gate});
+
+  /// When set, the lookup finishes only after this future completes.
+  final Future<void>? gate;
   @override
-  Future<Map<String, String>> system() async => {
+  Future<Map<String, String>> system() async {
+    await gate;
+    return Map.of(_values);
+  }
+
+  static const _values = {
     'platform': 'mobile',
     'osName': 'iOS',
     'osVersion': '18.0',
@@ -122,6 +132,7 @@ class Harness {
     FakeTime? time,
     PulseOptions options = const PulseOptions(debug: false),
     bool initialize = true,
+    PulseEnvironment? environment,
   }) : storage = storage ?? FakeStorage(),
        time = time ?? FakeTime() {
     runtime = PulseRuntime(
@@ -131,7 +142,7 @@ class Harness {
       storage: this.storage,
       transport: transport,
       compression: const IoCompression(),
-      environment: FakeEnvironment(),
+      environment: environment ?? FakeEnvironment(),
       log: (_) {},
     );
     if (initialize) {

@@ -23,6 +23,8 @@ class FileStorage implements PulseStorage {
           ? 2
           : name == 'privacy-generation'
           ? 129
+          : name == 'install-id'
+          ? 65
           : 256 * 1024 * 1024 + 1;
       final length = await handle.length();
       if (length > maximum) {

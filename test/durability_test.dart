@@ -194,7 +194,8 @@ void main() {
       );
       h.runtime.setUser(null);
       await h.send('second');
-      expect(h.events.last.containsKey('userHash'), false);
+      expect(h.events.last['userHash'], isNotNull);
+      expect(h.events.last['userHash'], isNot(h.events.first['userHash']));
     },
   );
 }

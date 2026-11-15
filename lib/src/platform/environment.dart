@@ -25,7 +25,7 @@ class NativeEnvironment implements PulseEnvironment {
       'locale': PlatformDispatcher.instance.locale.toLanguageTag(),
     };
     try {
-      final info = await PackageInfo.fromPlatform();
+      final info = await _retry(PackageInfo.fromPlatform);
       result.addAll({
         'appVersion': info.version,
         'appBuildNumber': info.buildNumber,
@@ -35,11 +35,26 @@ class NativeEnvironment implements PulseEnvironment {
       /* App metadata is optional if the platform plugin is unavailable. */
     }
     try {
-      result.addAll(await deviceSystem(DeviceInfoPlugin()));
+      result.addAll(await _retry(() => deviceSystem(DeviceInfoPlugin())));
     } catch (_) {
       /* Never substitute unique identifiers for missing model data. */
+      result['osVersion'] = pulseOsVersion(Platform.operatingSystemVersion);
     }
     return result;
+  }
+
+  /// Platform channels can fail right at start; try a few times quickly.
+  static Future<T> _retry<T>(Future<T> Function() action) async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await action();
+      } catch (_) {
+        if (attempt == 3) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    }
   }
 
   Future<Map<String, String>> deviceSystem(DeviceInfoPlugin plugin) async {
@@ -63,10 +78,14 @@ class NativeEnvironment implements PulseEnvironment {
       model = 'PC';
     } else if (Platform.isLinux) {
       final info = await plugin.linuxInfo;
-      version = info.versionId ?? '';
+      version = info.versionId ?? info.version ?? '';
       model = 'Desktop';
     }
-    return {'osVersion': pulseOsVersion(version), 'deviceModel': model};
+    var osVersion = pulseOsVersion(version);
+    if (osVersion.isEmpty) {
+      osVersion = pulseOsVersion(Platform.operatingSystemVersion);
+    }
+    return {'osVersion': osVersion, 'deviceModel': model};
   }
 }
 
