@@ -1,8 +1,10 @@
 # MightyS Pulse for Flutter
 
-Privacy-first analytics for Flutter apps and games. No device IDs, offline queue, tiny.
+Privacy-first analytics for Flutter apps and games. No device IDs, offline queue.
 
-MightyS Pulse lets you send named signals (events) with an optional number and a few properties, and see them in a dashboard. This package is for Flutter app and game developers who want usage numbers without advertising ids, device identifiers, cookies or fingerprinting.
+Docs: https://pulse.mightys.dev/docs/flutter/
+
+Send named signals (events) with an optional number and a few properties, and see them in the MightyS Pulse dashboard. This package is for Flutter app and game developers who want usage numbers without advertising ids, device identifiers, cookies or fingerprinting.
 
 ## Install
 
@@ -70,9 +72,19 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
 | `maxQueueSize` | 1000 | Signals kept offline. Clamped to 1 through 10000. The oldest are dropped first. |
 | `maxQueueAgeDays` | 7 | Days a queued signal is kept. Clamped to at most 29. |
 | `gzip` | true | Compresses batches larger than 1024 bytes. |
-| `debug` | true in debug builds, false in profile and release | Marks signals as test data and prints short diagnostics. |
+| `debug` | true in debug builds, false in profile and release | Marks signals as test data and prints short diagnostics. See [Test mode](#test-mode). |
 | `sendAppIdentity` | false | Adds the package name as `system.bundleId`. |
 | `appVersion` | from the platform | Overrides the app version. |
+
+## Test mode
+
+Every signal carries a `debug` flag. `debug: true` means test data, and the dashboard's test mode switch chooses whether you see test signals or real ones. You need only one app key per app: the same key serves both.
+
+Unless you set it, `PulseOptions.debug` is `true` in a debug build (what `flutter run` starts) and `false` in profile and release builds. The default follows Flutter's build mode, is fixed for a given build and never changes while the app runs. An explicit value always wins, in both directions:
+
+```dart
+await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(debug: true)); // force test data
+```
 
 ## Delivery and offline behaviour
 

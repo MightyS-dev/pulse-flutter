@@ -2,6 +2,6 @@
 abstract final class PulseInfo {
   static const displayName = 'MightyS Pulse';
   static const sdkName = 'pulse-flutter';
-  static const version = '0.9.0';
+  static const version = '0.9.1';
   static const defaultHost = 'https://in.mightys.dev';
 }

@@ -1,6 +1,6 @@
 name: mightys_pulse
-description: Privacy-first analytics for Flutter apps and games. No device IDs, offline queue, tiny. Send named signals and see them in the Pulse dashboard.
-version: 0.9.0
+description: Privacy-first analytics for Flutter apps and games on Android and iOS. Named events, no device IDs, offline queue. See your signals in the MightyS Pulse dashboard.
+version: 0.9.1
 homepage: https://pulse.mightys.dev
 repository: https://github.com/MightyS-dev/pulse-flutter
 issue_tracker: https://github.com/MightyS-dev/pulse-flutter/issues
@@ -10,7 +10,7 @@ topics:
   - privacy
   - telemetry
   - events
-  - offline-first
+  - product-analytics
 platforms:
   android:
   ios:

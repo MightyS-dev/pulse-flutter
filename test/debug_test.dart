@@ -29,4 +29,38 @@ void main() {
       expect(messages, isEmpty);
     },
   );
+
+  group('test mode flag', () {
+    Future<Object?> sentDebug(PulseOptions options) async {
+      final h = Harness(options: options);
+      await h.settle();
+      await h.send('mode.check');
+      return h.events.single['debug'];
+    }
+
+    test('an explicit value wins in both directions', () async {
+      expect(await sentDebug(const PulseOptions(debug: true)), true);
+      expect(await sentDebug(const PulseOptions(debug: false)), false);
+    });
+
+    test('the default follows the build mode and is the same on every run', () {
+      const expected =
+          !bool.fromEnvironment('dart.vm.product') &&
+          !bool.fromEnvironment('dart.vm.profile');
+      expect(const PulseOptions().debug, expected);
+      expect(const PulseOptions().debug, const PulseOptions().debug);
+      // Flutter tests run in a debug-style VM, so the default is test mode.
+      expect(const PulseOptions().debug, true);
+    });
+
+    test(
+      'the default is carried to the wire when no option is given',
+      () async {
+        expect(
+          await sentDebug(const PulseOptions()),
+          const PulseOptions().debug,
+        );
+      },
+    );
+  });
 }
