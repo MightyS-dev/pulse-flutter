@@ -41,7 +41,22 @@ Public calls never throw into your app and never block the main thread. Calls ma
 
 ## What is sent and what is never sent
 
-Sent with every signal: your signal name, optional number and properties, a UTC timestamp, the debug flag, a random session id, platform (`mobile` or `desktop`), OS name and version, app version and build, device model, locale, and the SDK name and version. The app's package or bundle id is sent only if you set `sendAppIdentity`.
+Sent with every signal: your signal name, optional number and properties, a UTC timestamp, the debug flag, a random session id, and the device, app and settings values below. A value the platform cannot give is left out, never guessed. Nothing needs to be set up for any of it.
+
+| Group | Values |
+| --- | --- |
+| Device | platform (`mobile` or `desktop`), device type (phone, tablet, desktop, tv, watch, car), manufacturer (Android) or Apple, device model, simulator or emulator flag, CPU architecture, OS name and version, Android API level, target environment (Apple: native, simulator, ios-on-mac) |
+| Screen | logical width and height, pixel scale, width and height in pixels, density (Android), number of displays, orientation (phones and tablets) |
+| Settings and accessibility | colour scheme (light or dark), layout direction, time zone id (macOS and Linux), UTC offset, language, preferred language, region, text scale, content size category (iOS), reduce motion, bold text, invert colours, increase contrast |
+| Connection and power | connection type (wifi, cellular, ethernet, none, other), battery saver on or off |
+| App and install | app name, version and build number, package or bundle id, install source (appstore, testflight, playstore, galaxystore, amazon, sideload, debug, other), debug build flag, Dart version (for example `Dart 3.10.4`), SDK name and version |
+| Usage statistics | date of the first session, sessions so far, distinct days used (all time and last 30 days), previous session length, average session length, seconds since the session started, and `isNewInstall` during the first session |
+
+Values that change while the app runs (orientation, colour scheme, text scale, accessibility settings, connection type, battery saver, UTC offset, screen size, session seconds) are read when each signal is captured, from cached state, without blocking. The rest is read once at start. The package or bundle id is sent unless you set `sendAppIdentity: false`.
+
+Usage statistics are kept in one small file named `usage` next to the install id in the app's own storage and are deleted together with it on opt-out.
+
+Automatic signals: the SDK sends `pulse.session_started` when a new session begins (app start, or the first signal after 30 minutes of inactivity), `pulse.new_install` once on the first launch after install, and `pulse.app_updated` (with `previousVersion` and `previousBuild`) once when the app version or build number changes. They are one per session or rarer, follow opt-out and carry the same debug flag as your own signals.
 
 Sessions use a random 128-bit id that changes after 30 minutes of inactivity.
 
@@ -51,7 +66,7 @@ User id: optional. If you call `setUser`, the hash of your id is sent instead of
 
 If the install id cannot be read or written, the SDK uses a random id kept in memory for that run.
 
-Never sent: advertising ids, IDFV, Android ids, serial numbers, device names, host names, user names, location, contacts, cookies or signing certificate hashes.
+Never sent: advertising ids, IDFV, Android ids, serial numbers, the device name set by the user, host names, user names, location, contacts, installed apps, network carrier, cookies or signing certificate hashes.
 
 Web: the package does nothing on Flutter web. It stores no install id, sets no cookies and sends no signals there.
 
@@ -66,7 +81,7 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
   flushIntervalSeconds: 30,
   maxBatchSize: 100,
   debug: false,
-  sendAppIdentity: false,
+  sendAppIdentity: true,
 ));
 ```
 
@@ -79,7 +94,7 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
 | `maxQueueAgeDays` | 7 | Days a queued signal is kept. Clamped to at most 29. |
 | `gzip` | true | Compresses batches larger than 1024 bytes. |
 | `debug` | true in debug builds, false in profile and release | Marks signals as test data and prints short diagnostics. See [Test mode](#test-mode). |
-| `sendAppIdentity` | false | Adds the package name as `system.bundleId`. |
+| `sendAppIdentity` | true | Sends the package name as `system.bundleId`. Set false to leave it out. |
 | `appVersion` | from the platform | Overrides the app version. |
 
 ## Test mode
@@ -103,7 +118,7 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(debug: true))
 
 ## Requirements
 
-- Android and iOS
+- Android and iOS (the connection type and battery saver values come from the `connectivity_plus` and `battery_plus` plugins; the Android merge adds the normal `ACCESS_NETWORK_STATE` permission)
 - Dart 3.10 or newer, Flutter 3.38.1 or newer
 
 ## Opt-out

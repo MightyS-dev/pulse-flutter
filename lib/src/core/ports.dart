@@ -26,6 +26,21 @@ abstract interface class PulseEnvironment {
   Future<Map<String, String>> system();
 }
 
+/// Values that change while the app runs (screen, settings, connection). Reads
+/// are cheap and synchronous; slow lookups are cached behind [warmUp].
+abstract interface class PulseLive {
+  Map<String, String> read();
+  Future<void> warmUp();
+}
+
+class NoLive implements PulseLive {
+  const NoLive();
+  @override
+  Map<String, String> read() => const {};
+  @override
+  Future<void> warmUp() async {}
+}
+
 abstract interface class PulseCompression {
   List<int> encode(List<int> bytes);
   List<int> decode(List<int> bytes);

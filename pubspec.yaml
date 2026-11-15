@@ -1,6 +1,6 @@
 name: mightys_pulse
 description: Privacy-first analytics for Flutter apps and games on Android and iOS. Named events, no device IDs, offline queue. See your signals in the MightyS Pulse dashboard.
-version: 0.9.2
+version: 0.9.3
 homepage: https://pulse.mightys.dev
 repository: https://github.com/MightyS-dev/pulse-flutter
 issue_tracker: https://github.com/MightyS-dev/pulse-flutter/issues
@@ -24,6 +24,8 @@ dependencies:
   path_provider: ^2.1.5
   package_info_plus: ^10.2.2
   device_info_plus: ^13.3.0
+  connectivity_plus: ^7.3.1
+  battery_plus: ^7.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

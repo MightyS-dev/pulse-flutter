@@ -11,9 +11,14 @@ class Capture {
 
   /// Hash of the anonymous install id, used while no user is set.
   String? installHash;
+
+  /// True when the latest [sessionAt] call created a new session.
+  bool startedSession = false;
   String sessionAt(DateTime now) {
-    if (_lastActivity == null ||
-        now.difference(_lastActivity!).inSeconds >= 1800) {
+    startedSession =
+        _lastActivity == null ||
+        now.difference(_lastActivity!).inSeconds >= 1800;
+    if (startedSession) {
       _session = random.token();
     }
     _lastActivity = now;

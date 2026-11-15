@@ -16,7 +16,7 @@ class PulseOptions {
     this.debug =
         !const bool.fromEnvironment('dart.vm.product') &&
         !const bool.fromEnvironment('dart.vm.profile'),
-    this.sendAppIdentity = false,
+    this.sendAppIdentity = true,
     this.appVersion,
   });
 
@@ -48,7 +48,7 @@ class PulseOptions {
   final bool debug;
 
   /// Whether the app package name is sent as `system.bundleId`. Defaults to
-  /// false.
+  /// true.
   final bool sendAppIdentity;
 
   /// Overrides the app version taken from the platform package info.

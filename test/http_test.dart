@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:mightys_pulse/src/core/options.dart';
+import 'package:mightys_pulse/src/core/runtime.dart';
+import 'package:mightys_pulse/src/platform/compression.dart';
+import 'support.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mightys_pulse/src/core/ports.dart';
 import 'package:mightys_pulse/src/platform/http_transport.dart';
@@ -15,7 +19,7 @@ void main() {
       server.listen((request) async {
         expect(request.method, 'POST');
         expect(request.headers.value('X-App-Key'), 'synthetic');
-        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.2');
+        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.3');
         expect(request.headers.value('Content-Encoding'), 'gzip');
         expect(request.headers.contentType?.mimeType, 'application/json');
         expect(request.headers.value('Cookie'), isNull);
@@ -111,4 +115,72 @@ void main() {
     transport.cancel();
     expect((await future).status, 0);
   });
+  test(
+    'a hung server is bounded, the queue survives and backoff delivers',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      var hang = true;
+      var delivered = 0;
+      server.listen((r) async {
+        if (hang) {
+          return; // never answers
+        }
+        await r.drain<void>();
+        delivered++;
+        r.response.statusCode = 202;
+        await r.response.close();
+      });
+      final time = FakeTime();
+      final storage = FakeStorage();
+      final runtime = PulseRuntime(
+        clock: time,
+        scheduler: time,
+        random: FakeRandom(),
+        storage: storage,
+        transport: IoTransport(timeout: const Duration(milliseconds: 100)),
+        compression: const IoCompression(),
+        environment: FakeEnvironment(),
+        log: (_) {},
+      );
+      await runtime.initialize(
+        'synthetic-key',
+        options: PulseOptions(
+          host: 'http://127.0.0.1:${server.port}',
+          debug: false,
+        ),
+      );
+      final watch = Stopwatch()..start();
+      runtime.track('kept');
+      final flushing = runtime.flush();
+      expect(
+        watch.elapsedMilliseconds,
+        lessThan(50),
+        reason: 'track and flush must not block',
+      );
+      var flushed = false;
+      unawaited(flushing.then((_) => flushed = true));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(
+        flushed,
+        false,
+        reason: 'flush waits for delivery, not for the caller',
+      );
+      expect(delivered, 0);
+      expect(
+        runtime.count,
+        3,
+        reason:
+            'the signals stay queued (two automatic plus one) after the timeout',
+      );
+      expect(storage.files.keys.any((k) => k.startsWith('queue-')), true);
+      hang = false;
+      time.advance(301);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await runtime.idle;
+      expect(delivered, 1);
+      expect(runtime.count, 0);
+      expect(flushed, true);
+    },
+  );
 }

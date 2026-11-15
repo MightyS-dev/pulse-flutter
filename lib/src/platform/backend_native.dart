@@ -13,12 +13,16 @@ import 'environment.dart';
 import 'file_storage.dart';
 import 'http_transport.dart';
 import 'lifecycle.dart';
+import 'live.dart';
 import 'system_services.dart';
 
 PulseBackend createBackend() {
   WidgetsFlutterBinding.ensureInitialized();
+  final live = NativeLive();
   return NativeBackend(
+    live.dispose,
     PulseRuntime(
+      live: live,
       clock: SystemClock(),
       scheduler: SystemScheduler(),
       random: SecureRandom(),
@@ -33,9 +37,10 @@ PulseBackend createBackend() {
 }
 
 class NativeBackend implements PulseBackend {
-  NativeBackend(this.runtime) {
+  NativeBackend(this._release, this.runtime) {
     _lifecycle = PulseLifecycle(runtime.backgroundSave);
   }
+  final void Function() _release;
   final PulseRuntime runtime;
   late final PulseLifecycle _lifecycle;
   @override
@@ -56,6 +61,7 @@ class NativeBackend implements PulseBackend {
   Future<void> setOptOut(bool value) => runtime.setOptOut(value);
   Future<void> dispose() async {
     _lifecycle.dispose();
+    _release();
     await runtime.close();
   }
 }

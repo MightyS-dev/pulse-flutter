@@ -132,12 +132,7 @@ void main() {
   test(
     'caller props snapshot, app identity option and version override',
     () async {
-      final h = Harness(
-        options: const PulseOptions(
-          sendAppIdentity: true,
-          appVersion: 'override',
-        ),
-      );
+      final h = Harness(options: const PulseOptions(appVersion: 'override'));
       final props = <String, Object?>{'original': 1};
       h.runtime.track('copy', props: props);
       props['original'] = 2;
@@ -146,7 +141,9 @@ void main() {
       final system = h.events.single['system']! as Map<String, Object?>;
       expect(system['bundleId'], 'test.local');
       expect(system['appVersion'], 'override');
-      final anonymous = Harness();
+      final anonymous = Harness(
+        options: const PulseOptions(debug: false, sendAppIdentity: false),
+      );
       await anonymous.send();
       expect(
         (anonymous.events.single['system']! as Map<String, Object?>)

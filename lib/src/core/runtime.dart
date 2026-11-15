@@ -10,6 +10,7 @@ import 'model.dart';
 import 'options.dart';
 import 'ports.dart';
 import 'queue.dart';
+import 'usage.dart';
 part 'runtime_delivery.dart';
 
 /// One serialized state owner. Network completion never holds the state lane.
@@ -24,10 +25,22 @@ class PulseRuntime implements PulseBackend {
     required this.environment,
     required this.log,
     this.computation = const InlineComputation(),
+    this.live = const NoLive(),
+    this.localTime = _systemLocal,
+    this.automaticSignals = true,
   }) : _capture = Capture(random) {
     _enqueue(_readPrivacy);
   }
   final PulseComputation computation;
+  final PulseLive live;
+
+  /// Whether session, install and update signals are sent. Always true in the
+  /// package; tests that count signals switch it off.
+  final bool automaticSignals;
+
+  /// Converts an instant to device local time (replaceable in tests).
+  final DateTime Function(DateTime) localTime;
+  static DateTime _systemLocal(DateTime value) => value.toLocal();
   final PulseClock clock;
   final PulseScheduler scheduler;
   final PulseRandom random;
@@ -38,21 +51,13 @@ class PulseRuntime implements PulseBackend {
   final void Function(String) log;
   final Capture _capture;
   final _queue = SignalQueue();
-  final _before =
-      <
-        ({
-          DateTime timestamp,
-          String session,
-          String? hash,
-          String type,
-          num? value,
-          Map<String, Object?> props,
-        })
-      >[];
+  final _before = <_Input>[];
   final _waiters = <_FlushWaiter>[];
   Future<void> _tail = Future.value();
   PulseOptions _options = const PulseOptions(debug: false);
-  static const _installName = 'install-id';
+  static const _installName = 'install-id', _usageName = 'usage';
+  UsageStats? _usage;
+  bool _installIsNew = false;
   static const _systemWait = Duration(seconds: 3);
   String? _key, _storageName, _processInstall;
   Uri? _endpoint;
@@ -109,6 +114,7 @@ class PulseRuntime implements PulseBackend {
     String? id;
     try {
       final bytes = await storage.read(_installName);
+      _installIsNew = bytes == null;
       if (bytes != null) {
         final decoded = utf8.decode(bytes, allowMalformed: true);
         if (RegExp(r'^[0-9a-f]{32}$').hasMatch(decoded)) {
@@ -130,9 +136,46 @@ class PulseRuntime implements PulseBackend {
     _capture.installHash = hashText(id);
   }
 
+  /// Loads the session statistics; an unreadable file starts fresh in memory.
+  Future<void> _ensureUsage() async {
+    if (_usage != null) {
+      return;
+    }
+    UsageStats? loaded;
+    try {
+      final bytes = await storage.read(_usageName);
+      if (bytes != null) {
+        loaded = UsageStats.decode(bytes);
+      }
+    } catch (_) {
+      _warn('Usage statistics unreadable; using this process only.');
+    }
+    _usage = loaded ?? UsageStats(newInstall: _installIsNew);
+  }
+
+  Future<void> _saveUsage({bool force = false}) async {
+    final usage = _usage;
+    if (usage == null || _optOut || (!usage.dirty && !force)) {
+      return;
+    }
+    try {
+      await storage.replace(_usageName, usage.encode());
+    } catch (_) {
+      _warn('Usage statistics not saved; keeping them in memory.');
+    }
+    usage.markSaved();
+  }
+
   Future<void> _forgetInstall() async {
     _processInstall = null;
     _capture.installHash = null;
+    _usage = null;
+    _installIsNew = false;
+    try {
+      await storage.remove(_usageName);
+    } catch (_) {
+      _warn('Usage statistics could not be removed.');
+    }
     try {
       await storage.remove(_installName);
     } catch (_) {
@@ -230,7 +273,7 @@ class PulseRuntime implements PulseBackend {
       }
     });
     unawaited(
-      Future<Map<String, String>>.sync(environment.system).then(
+      _gather().then(
         (value) {
           if (!done.isCompleted) {
             done.complete(Map.of(value));
@@ -246,6 +289,29 @@ class PulseRuntime implements PulseBackend {
     );
     final result = await done.future;
     timer.cancel();
+    return result;
+  }
+
+  Future<Map<String, String>> _gather() async {
+    final warm = Future<void>.sync(live.warmUp).catchError((Object _) {});
+    final system = await environment.system();
+    await warm;
+    return system;
+  }
+
+  /// Dynamic values at [at]: the host's live state plus the UTC offset.
+  Map<String, String> _liveAt(DateTime at) {
+    final result = <String, String>{};
+    try {
+      result.addAll(live.read());
+    } catch (_) {
+      _warn('Live state unavailable.');
+    }
+    try {
+      result['utcOffsetMinutes'] = '${localTime(at).timeZoneOffset.inMinutes}';
+    } catch (_) {
+      /* The offset is optional. */
+    }
     return result;
   }
 
@@ -274,21 +340,26 @@ class PulseRuntime implements PulseBackend {
           _warn('Invalid property ignored.');
         }
       }
+      final snapshot = _liveAt(at);
       _enqueue(() async {
         if (_optOut) {
           return;
         }
         await _ensureInstall();
+        await _ensureUsage();
         if (_optOut) {
           return;
         }
+        final session = _capture.sessionAt(at);
         final input = (
           timestamp: at,
-          session: _capture.sessionAt(at),
+          session: session,
+          fresh: _capture.startedSession,
           hash: _capture.userHash,
           type: type,
           value: value,
           props: safe,
+          live: snapshot,
         );
         if (_key == null) {
           if (_before.length == 100) {
@@ -297,6 +368,7 @@ class PulseRuntime implements PulseBackend {
           _before.add(input);
         } else {
           _append(input);
+          await _saveUsage();
           _requestPump();
         }
       });
@@ -305,25 +377,43 @@ class PulseRuntime implements PulseBackend {
     }
   }
 
-  void _append(
-    ({
-      DateTime timestamp,
-      String session,
-      String? hash,
-      String type,
-      num? value,
-      Map<String, Object?> props,
-    })
-    input,
+  void _append(_Input input) {
+    final usage = _usage;
+    if (usage != null) {
+      if (input.fresh) {
+        final auto = usage.beginSession(
+          input.timestamp,
+          localTime,
+          _system['appVersion'] ?? '',
+          _system['appBuildNumber'] ?? '',
+        );
+        for (final signal in automaticSignals ? auto : const <AutoSignal>[]) {
+          _appendOne(input, signal.type, null, signal.props);
+        }
+      }
+      usage.touch(input.timestamp);
+    }
+    _appendOne(input, input.type, input.value, input.props);
+  }
+
+  void _appendOne(
+    _Input input,
+    String type,
+    num? value,
+    Map<String, Object?> props,
   ) {
     final json = Signal.encode(
       timestamp: input.timestamp,
       session: input.session,
       userHash: input.hash ?? _capture.installHash,
-      type: input.type,
-      value: input.value,
-      props: input.props,
-      system: _system,
+      type: type,
+      value: value,
+      props: props,
+      system: {
+        ..._system,
+        ...input.live,
+        ...?_usage?.fields(input.timestamp, localTime),
+      },
       debug: _options.debug,
       warn: _warn,
     );
@@ -425,6 +515,7 @@ class PulseRuntime implements PulseBackend {
     try {
       await _enqueue(() async {
         _forced = true;
+        await _saveUsage(force: true);
         await _pump();
       }).timeout(const Duration(seconds: 2));
     } catch (_) {
@@ -484,10 +575,21 @@ class PulseRuntime implements PulseBackend {
         _queue.clear();
         _before.clear();
       } else {
+        final current = _liveAt(clock.now);
         for (final input in _before) {
-          _append(input);
+          _append((
+            timestamp: input.timestamp,
+            session: input.session,
+            fresh: input.fresh,
+            hash: input.hash,
+            type: input.type,
+            value: input.value,
+            props: input.props,
+            live: {...current, ...input.live},
+          ));
         }
         _before.clear();
+        await _saveUsage();
       }
       _prune();
       return true;
@@ -575,6 +677,17 @@ class PulseRuntime implements PulseBackend {
   static Duration _seconds(double value) =>
       Duration(microseconds: (value * 1000000).round());
 }
+
+typedef _Input = ({
+  DateTime timestamp,
+  String session,
+  bool fresh,
+  String? hash,
+  String type,
+  num? value,
+  Map<String, Object?> props,
+  Map<String, String> live,
+});
 
 class _FlushWaiter {
   _FlushWaiter(this.ids, this.done);

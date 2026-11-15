@@ -106,6 +106,19 @@ class FakeEnvironment implements PulseEnvironment {
   };
 }
 
+/// Live state a test can change between two signals.
+class FakeLive implements PulseLive {
+  FakeLive([Map<String, String>? values]) : values = values ?? {};
+  Map<String, String> values;
+  int warmUps = 0;
+  @override
+  Map<String, String> read() => Map.of(values);
+  @override
+  Future<void> warmUp() async {
+    warmUps++;
+  }
+}
+
 class FakeTransport implements PulseTransport {
   final requests = <PulseRequest>[];
   final replies = <PulseResponse>[];
@@ -133,6 +146,8 @@ class Harness {
     PulseOptions options = const PulseOptions(debug: false),
     bool initialize = true,
     PulseEnvironment? environment,
+    PulseLive? live,
+    bool automatic = false,
   }) : storage = storage ?? FakeStorage(),
        time = time ?? FakeTime() {
     runtime = PulseRuntime(
@@ -143,6 +158,9 @@ class Harness {
       transport: transport,
       compression: const IoCompression(),
       environment: environment ?? FakeEnvironment(),
+      live: live ?? const NoLive(),
+      localTime: (value) => value,
+      automaticSignals: automatic,
       log: (_) {},
     );
     if (initialize) {
@@ -180,7 +198,12 @@ class Harness {
     await settle();
   }
 
-  List<Map<String, Object?>> get events =>
+  /// Every signal sent, without the automatic `pulse.` ones.
+  List<Map<String, Object?>> get events => allEvents
+      .where((e) => !(e['type']! as String).startsWith('pulse.'))
+      .toList();
+
+  List<Map<String, Object?>> get allEvents =>
       transport.requests.expand(eventsOf).toList();
 }
 

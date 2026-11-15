@@ -4,6 +4,14 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.3 - 2026-11-15
+
+- Every signal now carries the device, screen, settings, app and usage values the platform can give, with no setup: device type and brand, CPU architecture, API level, screen size and scale, orientation, colour scheme, language and region, text scale and accessibility settings, connection type, battery saver, app name, install source and debug build flag.
+- Usage statistics travel with each signal: first session date, sessions so far, distinct days used, previous and average session length.
+- Three automatic signals: `pulse.session_started`, `pulse.new_install` and `pulse.app_updated`. They are one per session or rarer and follow opt-out.
+- The package or bundle id is now sent by default (set `sendAppIdentity: false` to leave it out).
+- Adds the `connectivity_plus` and `battery_plus` plugins for connection type and battery saver.
+
 ## 0.9.2 - 2026-11-15
 
 - Users are counted without any setup: the SDK sends a random anonymous install id (hashed) until you call `setUser`.
