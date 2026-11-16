@@ -96,6 +96,34 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
 | `debug` | true in debug builds, false in profile and release | Marks signals as test data and prints short diagnostics. See [Test mode](#test-mode). |
 | `sendAppIdentity` | true | Sends the package name as `system.bundleId`. Set false to leave it out. |
 | `appVersion` | from the platform | Overrides the app version. |
+| `automaticScreenViews` | true | Lets `Pulse.navigatorObserver` send screen views. Set false to switch them off. |
+| `automaticSignals` | true | Sends `pulse.session_started`, `pulse.new_install` and `pulse.app_updated`. Set false to switch them off. |
+
+## Screen views
+
+Add one line to send a `pulse.screen_view` signal each time a screen appears:
+
+```dart
+MaterialApp(navigatorObservers: [Pulse.navigatorObserver], /* ... */);
+// go_router: GoRouter(observers: [Pulse.navigatorObserver], /* ... */)
+```
+
+- Props: `screen` (at most 128 characters) and `previousScreen` when known. Never a URL, query, title or anything the user typed.
+- Name: the route name, or the route class name when it has none. Query and fragment are removed, and numeric and uuid-like path segments become `:id`.
+- Dialogs, bottom sheets and menus are not screens and are skipped. The same screen appearing again with no other screen in between is sent once.
+- Other screens: call `Pulse.screen('Name')`. It works with or without the observer and follows opt-out.
+- Switch off: `PulseOptions(automaticScreenViews: false)` makes the observer do nothing.
+
+## Settings from the portal
+
+The portal can switch these off for your app without a package update:
+
+- screen views, and all automatic signals (`pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`), or any one of those types
+- the field groups device, screen, settings, network, app and usage (the basic platform, version, locale, SDK and bundle id fields are always sent)
+
+Once per launch the SDK reads the settings in the background (it never delays `initialize`, `track` or `flush`) and keeps them in its own storage. A change applies from the next launch and stays the same for the whole run. Everything is on when the settings cannot be read: no network, an error, an unreadable answer, or none stored yet. Opt-out deletes the stored settings.
+
+The options `automaticScreenViews` and `automaticSignals` can only switch things off as well. Setting them to true never turns on what the portal switched off, and `Pulse.screen` also sends nothing when the portal switched screen views off.
 
 ## Test mode
 

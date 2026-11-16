@@ -1,3 +1,4 @@
+import 'config.dart';
 import 'options.dart';
 
 abstract interface class PulseBackend {
@@ -10,4 +11,7 @@ abstract interface class PulseBackend {
   Future<void> flush();
   Future<void> setOptOut(bool value);
   bool get optOut;
+
+  /// Portal settings in force for this run (everything on until read).
+  PulseConfig get config;
 }

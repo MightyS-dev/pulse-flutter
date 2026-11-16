@@ -133,6 +133,20 @@ class FakeTransport implements PulseTransport {
         ));
   }
 
+  final configRequests = <({Uri url, String key, String? etag})>[];
+  PulseResponse? configReply;
+  Future<PulseResponse> Function()? configHandler;
+  @override
+  Future<PulseResponse> get(
+    Uri url,
+    String appKey, {
+    String? ifNoneMatch,
+  }) async {
+    configRequests.add((url: url, key: appKey, etag: ifNoneMatch));
+    return await (configHandler?.call() ??
+        Future.value(configReply ?? const PulseResponse(404)));
+  }
+
   @override
   void cancel() {
     cancellations++;

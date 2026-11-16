@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mightys_pulse/src/client.dart';
 import 'package:mightys_pulse/src/core/backend.dart';
+import 'package:mightys_pulse/src/core/config.dart';
 import 'package:mightys_pulse/src/core/options.dart';
 import 'package:mightys_pulse/src/core/ports.dart';
 import 'support.dart';
@@ -9,6 +10,8 @@ import 'support.dart';
 class BrokenBackend implements PulseBackend {
   @override
   bool get optOut => throw StateError('getter');
+  @override
+  PulseConfig get config => throw StateError('config');
   @override
   Future<void> initialize(
     String key, {

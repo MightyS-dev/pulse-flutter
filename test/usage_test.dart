@@ -183,6 +183,70 @@ void main() {
     await next.send('b');
     expect(next.allEvents.any((e) => e['type'] == 'pulse.app_updated'), true);
   });
+  test(
+    'a restart inside the idle window with a new version updates once',
+    () async {
+      final storage = FakeStorage();
+      await session(
+        storage,
+        environment: VersionEnvironment('1.0.0', '1'),
+      ).send('a');
+      final next = session(
+        storage,
+        at: DateTime.utc(2026, 11, 13, 12, 5),
+        environment: VersionEnvironment('1.1.0', '2'),
+      );
+      await next.send('b');
+      await next.send('c');
+      final updates = next.allEvents
+          .where((e) => e['type'] == 'pulse.app_updated')
+          .toList();
+      expect(updates.length, 1);
+      expect(updates.single['props'], {
+        'previousVersion': '1.0.0',
+        'previousBuild': '1',
+      });
+      final again = session(
+        storage,
+        at: DateTime.utc(2026, 11, 13, 12, 10),
+        environment: VersionEnvironment('1.1.0', '2'),
+      );
+      await again.send('d');
+      expect(
+        again.allEvents.any((e) => e['type'] == 'pulse.app_updated'),
+        false,
+      );
+    },
+  );
+  test('the stored version changes only when the update is queued', () async {
+    final storage = FakeStorage();
+    await session(
+      storage,
+      environment: VersionEnvironment('1.0.0', '1'),
+    ).send('a');
+    final off = session(
+      storage,
+      at: DateTime.utc(2026, 11, 13, 12, 5),
+      environment: VersionEnvironment('1.1.0', '2'),
+      options: const PulseOptions(debug: false, automaticSignals: false),
+    );
+    await off.send('b');
+    expect(off.allEvents.any((e) => e['type'] == 'pulse.app_updated'), false);
+    final on = session(
+      storage,
+      at: DateTime.utc(2026, 11, 13, 12, 10),
+      environment: VersionEnvironment('1.1.0', '2'),
+    );
+    await on.send('c');
+    final updates = on.allEvents
+        .where((e) => e['type'] == 'pulse.app_updated')
+        .toList();
+    expect(updates.length, 1);
+    expect(updates.single['props'], {
+      'previousVersion': '1.0.0',
+      'previousBuild': '1',
+    });
+  });
   test('an install id without usage data is not a new install', () async {
     final storage = FakeStorage()..files['install-id'] = utf8.encode('a' * 32);
     final h = session(storage);

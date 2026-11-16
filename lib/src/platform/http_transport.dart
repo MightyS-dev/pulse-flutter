@@ -54,6 +54,55 @@ class IoTransport implements PulseTransport {
   }
 
   @override
+  Future<PulseResponse> get(
+    Uri url,
+    String appKey, {
+    String? ifNoneMatch,
+  }) async {
+    final duration = timeout ?? const Duration(seconds: 10);
+    final client = HttpClient()
+      ..connectionTimeout = duration
+      ..autoUncompress = false
+      ..userAgent = '${PulseInfo.sdkName}/${PulseInfo.version}';
+    _clients.add(client);
+    try {
+      return await _get(client, url, appKey, ifNoneMatch).timeout(duration);
+    } catch (_) {
+      return const PulseResponse(0);
+    } finally {
+      _clients.remove(client);
+      client.close(force: true);
+    }
+  }
+
+  Future<PulseResponse> _get(
+    HttpClient client,
+    Uri url,
+    String appKey,
+    String? ifNoneMatch,
+  ) async {
+    final request = await client.getUrl(url);
+    request.followRedirects = false;
+    request.headers.set('X-App-Key', appKey);
+    request.headers.set('Accept', 'application/json');
+    if (ifNoneMatch != null) {
+      request.headers.set('If-None-Match', ifNoneMatch);
+    }
+    final response = await request.close();
+    final body = <int>[];
+    await for (final chunk in response) {
+      if (body.length + chunk.length > 65536) {
+        return PulseResponse(response.statusCode);
+      }
+      body.addAll(chunk);
+    }
+    return PulseResponse(
+      response.statusCode,
+      body: utf8.decode(body, allowMalformed: true),
+    );
+  }
+
+  @override
   void cancel() {
     for (final client in _clients.toList()) {
       client.close(force: true);

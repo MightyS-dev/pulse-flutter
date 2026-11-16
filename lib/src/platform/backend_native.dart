@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/backend.dart';
+import '../core/config.dart';
 import '../core/model.dart';
 import '../core/options.dart';
 import '../core/ports.dart';
@@ -45,6 +46,8 @@ class NativeBackend implements PulseBackend {
   late final PulseLifecycle _lifecycle;
   @override
   bool get optOut => runtime.optOut;
+  @override
+  PulseConfig get config => runtime.config;
   @override
   Future<void> initialize(
     String key, {

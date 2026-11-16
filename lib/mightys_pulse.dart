@@ -3,10 +3,12 @@ library;
 
 import 'src/client.dart';
 import 'src/core/options.dart';
+import 'src/screen_observer.dart';
 import 'src/platform/backend_stub.dart'
     if (dart.library.io) 'src/platform/backend_native.dart'
     as platform;
 export 'src/core/options.dart' show PulseOptions;
+export 'src/screen_observer.dart' show PulseNavigatorObserver;
 
 /// The process-wide analytics client. Initialize once near application startup.
 abstract final class Pulse {
@@ -22,6 +24,16 @@ abstract final class Pulse {
   /// (String, bool, int, finite double). Invalid input is dropped, never thrown.
   static void track(String type, {num? value, Map<String, Object?>? props}) =>
       _client.track(type, value: value, props: props);
+
+  /// Add to `navigatorObservers` (or a router's observers) to send a
+  /// `pulse.screen_view` for each screen. Switch off with
+  /// `PulseOptions(automaticScreenViews: false)`.
+  static final PulseNavigatorObserver navigatorObserver =
+      PulseNavigatorObserver(_client.screens);
+
+  /// Sends a `pulse.screen_view` for [name] (at most 128 characters). Use it
+  /// where the observer cannot see a screen. Follows opt-out.
+  static void screen(String name) => _client.screen(name);
 
   /// Sets a stable user id that is hashed (SHA-256) on the device before use, or
   /// clears it with null. The raw id is never stored or sent.

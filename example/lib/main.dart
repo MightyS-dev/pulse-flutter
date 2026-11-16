@@ -45,6 +45,7 @@ class ExampleApp extends StatelessWidget {
       colorSchemeSeed: Colors.teal,
       brightness: Brightness.dark,
     ),
+    navigatorObservers: [Pulse.navigatorObserver],
     home: ExampleScreen(actions: actions, configured: configured),
   );
 }

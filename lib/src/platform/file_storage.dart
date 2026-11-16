@@ -25,6 +25,8 @@ class FileStorage implements PulseStorage {
           ? 129
           : name == 'install-id'
           ? 65
+          : name == 'config'
+          ? 65536
           : name == 'usage'
           ? 262144
           : 256 * 1024 * 1024 + 1;

@@ -18,6 +18,8 @@ class PulseOptions {
         !const bool.fromEnvironment('dart.vm.profile'),
     this.sendAppIdentity = true,
     this.appVersion,
+    this.automaticScreenViews = true,
+    this.automaticSignals = true,
   });
 
   /// Base URL of the ingest host (HTTP or HTTPS, no credentials, query or
@@ -54,6 +56,16 @@ class PulseOptions {
   /// Overrides the app version taken from the platform package info.
   final String? appVersion;
 
+  /// Whether `Pulse.navigatorObserver` sends screen views. Defaults to true.
+  /// `Pulse.screen` always works.
+  final bool automaticScreenViews;
+
+  /// Whether `pulse.session_started`, `pulse.new_install` and
+  /// `pulse.app_updated` are sent. Defaults to true. Like
+  /// [automaticScreenViews] it can only switch things off: the portal settings
+  /// apply on top of it.
+  final bool automaticSignals;
+
   /// Returns a copy with every limit clamped to its supported range.
   PulseOptions normalized() => PulseOptions(
     host: host,
@@ -70,5 +82,7 @@ class PulseOptions {
     debug: debug,
     sendAppIdentity: sendAppIdentity,
     appVersion: appVersion,
+    automaticScreenViews: automaticScreenViews,
+    automaticSignals: automaticSignals,
   );
 }

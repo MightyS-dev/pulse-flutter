@@ -5,6 +5,7 @@ import 'advice.dart';
 import 'backend.dart';
 import 'capture.dart';
 import 'computation.dart';
+import 'config.dart';
 import 'info.dart';
 import 'model.dart';
 import 'options.dart';
@@ -55,7 +56,14 @@ class PulseRuntime implements PulseBackend {
   final _waiters = <_FlushWaiter>[];
   Future<void> _tail = Future.value();
   PulseOptions _options = const PulseOptions(debug: false);
-  static const _installName = 'install-id', _usageName = 'usage';
+  static const _installName = 'install-id',
+      _usageName = 'usage',
+      _configName = 'config';
+  PulseConfig _config = PulseConfig.defaults;
+
+  /// Portal settings in force for this run: the cached ones read at initialize.
+  @override
+  PulseConfig get config => _config;
   UsageStats? _usage;
   bool _installIsNew = false;
   static const _systemWait = Duration(seconds: 3);
@@ -181,6 +189,11 @@ class PulseRuntime implements PulseBackend {
     } catch (_) {
       _warn('Install id could not be removed.');
     }
+    try {
+      await storage.remove(_configName);
+    } catch (_) {
+      _warn('Settings could not be removed.');
+    }
   }
 
   Future<void> _readPrivacy() async {
@@ -259,8 +272,62 @@ class PulseRuntime implements PulseBackend {
       _system['appVersion'] = _options.appVersion!;
     }
     _system = _system.map((k, v) => MapEntry(k, _bounded(v)));
+    final cached = await _readConfig();
+    _config = cached ?? PulseConfig.defaults;
     _requestPump();
+    if (!_optOut) {
+      final revision = _revision;
+      unawaited(_fetchConfig(key, cached, revision));
+    }
   });
+
+  /// The cached portal settings, or null when there are none or they are unreadable.
+  Future<PulseConfig?> _readConfig() async {
+    try {
+      final bytes = await storage.read(_configName);
+      return bytes == null
+          ? null
+          : PulseConfig.parse(utf8.decode(bytes, allowMalformed: true));
+    } catch (_) {
+      _warn('Settings unreadable; everything stays on.');
+      return null;
+    }
+  }
+
+  /// Reads the portal settings once, in the background. The result is stored
+  /// for the next launch and never changes this run. Never throws.
+  Future<void> _fetchConfig(
+    String key,
+    PulseConfig? cached,
+    int revision,
+  ) async {
+    try {
+      final base = _endpoint;
+      if (base == null) return;
+      final url = base.replace(
+        path: base.path.replaceFirst(RegExp(r'signals$'), 'config'),
+      );
+      final reply = await transport.get(
+        url,
+        key,
+        ifNoneMatch: cached == null ? null : '"${cached.version}"',
+      );
+      if (reply.status != 200 || _optOut || revision != _revision || _closed) {
+        return;
+      }
+      final fetched = PulseConfig.parse(reply.body);
+      if (fetched == null) {
+        _warn('Settings response ignored.');
+        return;
+      }
+      await _enqueue(() async {
+        if (_optOut || revision != _revision) return;
+        await storage.replace(_configName, fetched.encode());
+      });
+    } catch (_) {
+      _warn('Settings not fetched; keeping the cached ones.');
+    }
+  }
 
   /// Waits for the device and app details, but never longer than a few
   /// seconds: after that the signals go out with what is known.
@@ -381,13 +448,15 @@ class PulseRuntime implements PulseBackend {
     final usage = _usage;
     if (usage != null) {
       if (input.fresh) {
+        final automatic = automaticSignals && _options.automaticSignals;
         final auto = usage.beginSession(
           input.timestamp,
           localTime,
           _system['appVersion'] ?? '',
           _system['appBuildNumber'] ?? '',
+          updateQueued: automatic && _config.allows(appUpdatedType),
         );
-        for (final signal in automaticSignals ? auto : const <AutoSignal>[]) {
+        for (final signal in automatic ? auto : const <AutoSignal>[]) {
           _appendOne(input, signal.type, null, signal.props);
         }
       }
@@ -396,24 +465,38 @@ class PulseRuntime implements PulseBackend {
     _appendOne(input, input.type, input.value, input.props);
   }
 
+  int _lastStamp = -(1 << 52);
+
+  /// Strictly increasing capture timestamps at millisecond resolution: the later of the clock reading and the
+  /// previous timestamp plus one millisecond. Signals are stored in capture order, automatic ones first.
+  DateTime _nextStamp(DateTime reading) {
+    final now = reading.millisecondsSinceEpoch;
+    _lastStamp = now > _lastStamp ? now : _lastStamp + 1;
+    return DateTime.fromMillisecondsSinceEpoch(_lastStamp, isUtc: true);
+  }
+
   void _appendOne(
     _Input input,
     String type,
     num? value,
     Map<String, Object?> props,
   ) {
+    if (!_config.allows(type)) {
+      return;
+    }
+    final stamp = _nextStamp(input.timestamp);
     final json = Signal.encode(
-      timestamp: input.timestamp,
+      timestamp: stamp,
       session: input.session,
       userHash: input.hash ?? _capture.installHash,
       type: type,
       value: value,
       props: props,
-      system: {
+      system: _config.filterSystem({
         ..._system,
         ...input.live,
         ...?_usage?.fields(input.timestamp, localTime),
-      },
+      }),
       debug: _options.debug,
       warn: _warn,
     );
@@ -421,7 +504,7 @@ class PulseRuntime implements PulseBackend {
       _warn('Invalid signal ignored.');
       return;
     }
-    _queue.add(Entry(random.token(), input.timestamp, json));
+    _queue.add(Entry(random.token(), stamp, json));
   }
 
   @override

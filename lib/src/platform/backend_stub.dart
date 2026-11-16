@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../core/backend.dart';
+import '../core/config.dart';
 import '../core/options.dart';
 import '../core/info.dart';
 
@@ -12,6 +13,8 @@ class WebBackend implements PulseBackend {
   bool _warned = false, _optOut = false;
   @override
   bool get optOut => _optOut;
+  @override
+  PulseConfig get config => PulseConfig.defaults;
   @override
   Future<void> initialize(
     String key, {

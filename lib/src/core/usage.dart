@@ -40,8 +40,9 @@ class UsageStats {
     DateTime now,
     DateTime Function(DateTime) local,
     String version,
-    String build,
-  ) {
+    String build, {
+    bool updateQueued = true,
+  }) {
     final signals = <AutoSignal>[];
     _closeOpen();
     final fresh = total == 0;
@@ -63,8 +64,12 @@ class UsageStats {
       );
     }
     signals.add(const AutoSignal('pulse.session_started'));
-    lastVersion = version;
-    lastBuild = build;
+    // The stored version moves on only when the update event is queued, so a
+    // launch that cannot send it leaves it for the next one.
+    if (!changed || updateQueued) {
+      lastVersion = version;
+      lastBuild = build;
+    }
     total++;
     final date = dateOf(local(now));
     firstDate ??= date;

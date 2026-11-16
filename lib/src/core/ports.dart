@@ -64,5 +64,8 @@ class PulseResponse {
 
 abstract interface class PulseTransport {
   Future<PulseResponse> send(PulseRequest request);
+
+  /// GET with the app key and an optional `If-None-Match` value.
+  Future<PulseResponse> get(Uri url, String appKey, {String? ifNoneMatch});
   void cancel();
 }
