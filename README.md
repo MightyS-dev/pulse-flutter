@@ -140,6 +140,7 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(debug: true))
 - The first batch after `initialize` is sent at once. Later batches follow the interval, the batch size, an explicit `flush`, or the app moving to the background.
 - Signals are queued on disk and survive restarts. Network errors and server errors are retried with exponential backoff (one second up to five minutes), and a `Retry-After` header is honoured.
 - Encoding, compression and file work run off the main thread.
+- Each batch carries an id, so a batch sent again after a lost answer is stored only once.
 - Delivery is at least once: after a crash a batch can be sent again. If the OS ends the app abruptly, the last signals may be lost.
 - A 401 response keeps the queue and stops sending until the app restarts.
 - The queue lives in the app support directory and needs a single owning process. App extensions that share it are not supported.

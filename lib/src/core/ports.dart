@@ -47,12 +47,15 @@ abstract interface class PulseCompression {
 }
 
 class PulseRequest {
-  PulseRequest(this.url, this.appKey, List<int> body, this.gzip)
+  PulseRequest(this.url, this.appKey, List<int> body, this.gzip, {this.batchId})
     : body = List.unmodifiable(body);
   final Uri url;
   final String appKey;
   final List<int> body;
   final bool gzip;
+
+  /// Sent as `X-Pulse-Batch`; the same value on every retry of one batch.
+  final String? batchId;
 }
 
 class PulseResponse {

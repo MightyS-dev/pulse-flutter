@@ -30,6 +30,7 @@ class Batch {
     this.json,
     List<int> wire,
     this.gzip, {
+    this.id = '',
     this.failures = 0,
     DateTime? retryAt,
   }) : ids = List.unmodifiable(ids),
@@ -37,12 +38,16 @@ class Batch {
        retryAt = retryAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   final List<String> ids;
   final String json;
+
+  /// Stable id of this exact batch, sent with every attempt. Empty until set.
+  String id;
   List<int> wire;
   bool gzip;
   int failures;
   DateTime retryAt;
   Map<String, Object?> toJson() => {
     'ids': ids,
+    'batchId': id,
     'json': json,
     'wire': base64Encode(wire),
     'gzip': gzip,
@@ -54,9 +59,13 @@ class Batch {
     map['json']! as String,
     base64Decode(map['wire']! as String),
     map['gzip']! as bool,
+    id: _validId(map['batchId']),
     failures: map['failures']! as int,
     retryAt: DateTime.parse(map['retryAt']! as String),
   );
+  static final _idFormat = RegExp(r'^[0-9a-f]{32}$');
+  static String _validId(Object? value) =>
+      value is String && _idFormat.hasMatch(value) ? value : '';
   void usePlain(DateTime now) {
     gzip = false;
     wire = List.unmodifiable(utf8.encode(json));

@@ -1,12 +1,15 @@
 part of 'runtime.dart';
 
 extension _Delivery on PulseRuntime {
-  Future<Batch> _makeBatch(Iterable<Entry> source, {bool plain = false}) =>
-      computation.batch(
-        _queue.select(_options.maxBatchSize, source),
-        !plain && _options.gzip && !_gzipDisabled,
-        compression,
-      );
+  Future<Batch> _makeBatch(Iterable<Entry> source, {bool plain = false}) async {
+    final batch = await computation.batch(
+      _queue.select(_options.maxBatchSize, source),
+      !plain && _options.gzip && !_gzipDisabled,
+      compression,
+    );
+    batch.id = random.token();
+    return batch;
+  }
 
   Future<void> _pump() async {
     _timer?.cancel();
@@ -65,7 +68,24 @@ extension _Delivery on PulseRuntime {
     }
     final epoch = ++_activeEpoch;
     _active = true;
-    final request = PulseRequest(_endpoint!, _key!, batch.wire, batch.gzip);
+    if (batch.id.isEmpty) {
+      // A queue saved before batch ids existed: give it one and keep it.
+      batch.id = random.token();
+      if (!await _persist()) {
+        _schedule(_storageRetryAt);
+        return;
+      }
+      if (_optOut || _closed) {
+        return;
+      }
+    }
+    final request = PulseRequest(
+      _endpoint!,
+      _key!,
+      batch.wire,
+      batch.gzip,
+      batchId: batch.id,
+    );
     try {
       unawaited(
         transport

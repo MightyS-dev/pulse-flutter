@@ -32,6 +32,9 @@ class IoTransport implements PulseTransport {
     request.followRedirects = false;
     request.headers.set('X-App-Key', input.appKey);
     request.headers.contentType = ContentType.json;
+    if (input.batchId != null) {
+      request.headers.set('X-Pulse-Batch', input.batchId!);
+    }
     if (input.gzip) {
       request.headers.set('Content-Encoding', 'gzip');
     }
