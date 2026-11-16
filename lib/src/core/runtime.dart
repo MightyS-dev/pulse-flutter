@@ -417,6 +417,12 @@ class PulseRuntime implements PulseBackend {
         if (_optOut) {
           return;
         }
+        // A signal that is not valid is dropped before it can start or
+        // extend a session.
+        if (!Signal.isValid(type, value)) {
+          _warn('Invalid signal ignored.');
+          return;
+        }
         final session = _capture.sessionAt(at);
         final input = (
           timestamp: at,

@@ -88,6 +88,14 @@ abstract final class Signal {
     return result;
   }
 
+  /// A signal needs a type with some text in it (at most 200 characters) and
+  /// a finite value, if it has one.
+  static bool isValid(String type, num? value) =>
+      type.trim().isNotEmpty &&
+      type.length <= 200 &&
+      validUnicode(type) &&
+      value?.isFinite != false;
+
   static String? encode({
     required DateTime timestamp,
     required String session,
@@ -99,10 +107,7 @@ abstract final class Signal {
     required bool debug,
     void Function(String)? warn,
   }) {
-    if (type.trim().isEmpty ||
-        type.length > 200 ||
-        !validUnicode(type) ||
-        value?.isFinite == false) {
+    if (!isValid(type, value)) {
       return null;
     }
     final time = DateTime.fromMillisecondsSinceEpoch(

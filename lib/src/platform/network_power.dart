@@ -1,6 +1,18 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+/// Active connections from either plugin shape: a single result (older
+/// plugin versions) or a list (newer ones).
+List<ConnectivityResult> connectionResults(Object? raw) {
+  if (raw is Iterable) {
+    return raw.whereType<ConnectivityResult>().toList();
+  }
+  if (raw is ConnectivityResult) {
+    return [raw];
+  }
+  return const [];
+}
+
 /// Connection type for the wire, from the active connections.
 String? connectionTypeOf(List<ConnectivityResult> results) {
   if (results.isEmpty) {
@@ -30,19 +42,19 @@ class NetworkPower {
     required this.powerSave,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
-  final Future<List<ConnectivityResult>> Function() connectivity;
-  final Stream<List<ConnectivityResult>> Function() changes;
+  final Future<Object?> Function() connectivity;
+  final Stream<Object?> Function() changes;
   final Future<bool> Function() powerSave;
   final DateTime Function() _now;
   String? _connection;
   bool? _power;
   DateTime _checked = DateTime.fromMillisecondsSinceEpoch(0);
-  StreamSubscription<List<ConnectivityResult>>? _subscription;
+  StreamSubscription<Object?>? _subscription;
   bool _refreshing = false;
 
   Future<void> warmUp() async {
     try {
-      _connection = connectionTypeOf(await connectivity());
+      _connection = connectionTypeOf(connectionResults(await connectivity()));
     } catch (_) {
       /* Connection type stays unknown. */
     }
@@ -50,10 +62,10 @@ class NetworkPower {
     await refreshPower();
   }
 
-  StreamSubscription<List<ConnectivityResult>>? _listen() {
+  StreamSubscription<Object?>? _listen() {
     try {
       return changes().listen(
-        (results) => _connection = connectionTypeOf(results),
+        (results) => _connection = connectionTypeOf(connectionResults(results)),
         onError: (Object _) {},
       );
     } catch (_) {

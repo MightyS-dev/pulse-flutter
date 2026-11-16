@@ -85,6 +85,16 @@ void main() {
   });
 
   group('connection and battery saver', () {
+    test('plugin answers of both shapes are understood', () {
+      expect(connectionResults(ConnectivityResult.wifi), [
+        ConnectivityResult.wifi,
+      ]);
+      expect(connectionResults([ConnectivityResult.mobile]), [
+        ConnectivityResult.mobile,
+      ]);
+      expect(connectionResults(null), isEmpty);
+    });
+
     test('connection type is chosen by one fixed order', () {
       String? type(List<ConnectivityResult> r) => connectionTypeOf(r);
       expect(

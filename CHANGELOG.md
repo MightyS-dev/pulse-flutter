@@ -4,6 +4,11 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.6 - 2026-11-16
+
+- A signal that is dropped because its name or value is not valid no longer starts a session or keeps one alive.
+- Works with older versions of device_info_plus, package_info_plus, connectivity_plus and battery_plus, so apps that pin older plugins (for example share_plus 10 or file_picker 11) resolve.
+
 ## 0.9.5 - 2026-11-16
 
 - A batch that is sent again after a lost answer is stored only once.

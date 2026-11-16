@@ -58,6 +58,7 @@ class PhonePlugin extends DeviceInfoPlugin {
     'totalDiskSize': 0,
     'systemFeatures': features,
     'isLowRamDevice': false,
+    'serialNumber': 'unknown',
     'physicalRamSize': 0,
     'availableRamSize': 0,
   });

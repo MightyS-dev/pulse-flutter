@@ -150,6 +150,17 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(debug: true))
 - Android and iOS (the connection type and battery saver values come from the `connectivity_plus` and `battery_plus` plugins; the Android merge adds the normal `ACCESS_NETWORK_STATE` permission)
 - Dart 3.10 or newer, Flutter 3.38.1 or newer
 
+Supported plugin versions. The SDK works with any version in these ranges, so your app can keep the older plugin majors it already uses:
+
+| Plugin | Supported versions |
+|---|---|
+| `device_info_plus` | 11.0.0 up to (not including) 14.0.0 |
+| `package_info_plus` | 8.0.2 up to (not including) 11.0.0 |
+| `connectivity_plus` | 5.0.0 up to (not including) 8.0.0 |
+| `battery_plus` | 5.0.1 up to (not including) 8.0.0 |
+| `path_provider` | 2.1.5 or newer 2.x |
+| `crypto` | 3.0.6 or newer 3.x |
+
 ## Opt-out
 
 `await Pulse.setOptOut(true)` stops collection, clears the queue and cancels active requests; bytes already sent cannot be recalled. The choice is remembered across launches. `Pulse.setOptOut(false)` turns collection back on. `Pulse.optOut` reads the current state and is true until the stored choice has been read.

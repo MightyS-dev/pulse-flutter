@@ -148,7 +148,7 @@ class NativeEnvironment implements PulseEnvironment {
         model = info.utsname.machine;
         extra['deviceBrand'] = 'Apple';
         extra['isSimulator'] = '${!info.isPhysicalDevice}';
-        extra['targetEnvironment'] = info.isiOSAppOnMac
+        extra['targetEnvironment'] = _iosAppOnMac(info)
             ? 'ios-on-mac'
             : (info.isPhysicalDevice ? 'native' : 'simulator');
         extra['deviceType'] = info.model.toLowerCase().contains('ipad')
@@ -181,6 +181,16 @@ class NativeEnvironment implements PulseEnvironment {
       osVersion = pulseOsVersion(Platform.operatingSystemVersion);
     }
     return {'osVersion': osVersion, 'deviceModel': model, ...extra};
+  }
+}
+
+/// Whether an iOS app runs on a Mac. Older plugin versions have no such
+/// field, so it is read dynamically and counts as false when missing.
+bool _iosAppOnMac(IosDeviceInfo info) {
+  try {
+    return (info as dynamic).isiOSAppOnMac == true;
+  } catch (_) {
+    return false;
   }
 }
 
