@@ -103,6 +103,8 @@ abstract final class Signal {
     required String type,
     num? value,
     Map<String, Object?>? props,
+    Map<String, Object?>? error,
+    Map<String, Object?>? heatmap,
     required Map<String, String> system,
     required bool debug,
     void Function(String)? warn,
@@ -123,6 +125,8 @@ abstract final class Signal {
       'debug': debug,
       'system': system,
       'props': sanitizeProps(props, warn),
+      'error': ?error,
+      'heatmap': ?heatmap,
     };
     final json = encodeJson(object);
     return utf8.encode(json).length + 2 <= maxBodyBytes ? json : null;

@@ -18,3 +18,4 @@ example/*.iml
 example/.metadata
 example/pubspec.lock
 example/.flutter-plugins-dependencies
+test/fixtures/control-v1/

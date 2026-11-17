@@ -1,4 +1,14 @@
+import 'control_state.dart';
 import 'info.dart';
+
+/// How much of an error is sent.
+enum ErrorDetail {
+  /// Type, filtered message and frames (default).
+  full,
+
+  /// Only the error type. No message and no frames.
+  typeOnly,
+}
 
 /// Delivery and privacy configuration passed to `Pulse.initialize`.
 ///
@@ -20,6 +30,10 @@ class PulseOptions {
     this.appVersion,
     this.automaticScreenViews = true,
     this.automaticSignals = true,
+    this.captureErrors = true,
+    this.errorDetail = ErrorDetail.full,
+    this.captureHeatmaps = true,
+    this.control = ControlMode.automatic,
   });
 
   /// Base URL of the ingest host (HTTP or HTTPS, no credentials, query or
@@ -66,6 +80,27 @@ class PulseOptions {
   /// apply on top of it.
   final bool automaticSignals;
 
+  /// Whether unhandled errors are sent as `pulse.error` (kind `error`).
+  /// Defaults to true. When false no error handler is installed.
+  /// `Pulse.trackError` works either way.
+  final bool captureErrors;
+
+  /// How much of an error is sent: [ErrorDetail.full] (default) or
+  /// [ErrorDetail.typeOnly].
+  final ErrorDetail errorDetail;
+
+  /// Whether taps are captured for heatmaps when the portal has them on.
+  /// Defaults to true (follow the portal). Like [automaticSignals] it can
+  /// only switch capture off, never on. Screen views and `automaticSignals`
+  /// must stay on as well.
+  final bool captureHeatmaps;
+
+  /// How App Control behaves. [ControlMode.automatic] (default) checks the
+  /// rules and shows the built-in screens through `Pulse.control.builder`,
+  /// [ControlMode.manual] checks and keeps `Pulse.control.state` up to date but
+  /// shows nothing, [ControlMode.off] makes no request for App Control at all.
+  final ControlMode control;
+
   /// Returns a copy with every limit clamped to its supported range.
   PulseOptions normalized() => PulseOptions(
     host: host,
@@ -84,5 +119,9 @@ class PulseOptions {
     appVersion: appVersion,
     automaticScreenViews: automaticScreenViews,
     automaticSignals: automaticSignals,
+    captureErrors: captureErrors,
+    errorDetail: errorDetail,
+    captureHeatmaps: captureHeatmaps,
+    control: control,
   );
 }

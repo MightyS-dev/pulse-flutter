@@ -10,6 +10,7 @@ import 'package:mightys_pulse/src/core/ports.dart';
 import 'package:mightys_pulse/src/platform/http_transport.dart';
 
 void main() {
+  uploadTests();
   test(
     'real localhost POST headers, gzip payload, advice and Retry-After',
     () async {
@@ -19,7 +20,7 @@ void main() {
       server.listen((request) async {
         expect(request.method, 'POST');
         expect(request.headers.value('X-App-Key'), 'synthetic');
-        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.6');
+        expect(request.headers.value('User-Agent'), 'pulse-flutter/0.9.7');
         expect(request.headers.value('Content-Encoding'), 'gzip');
         expect(request.headers.contentType?.mimeType, 'application/json');
         expect(request.headers.value('Cookie'), isNull);
@@ -183,4 +184,50 @@ void main() {
       expect(flushed, true);
     },
   );
+}
+
+void uploadTests() {
+  test(
+    'upload sends the raw image with key and content type, no gzip',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        expect(request.method, 'POST');
+        expect(request.uri.path, '/api/v1/heatmap/screenshot');
+        expect(request.uri.queryParameters['debug'], 'true');
+        expect(request.headers.value('X-App-Key'), 'synthetic');
+        expect(request.headers.value('Content-Encoding'), isNull);
+        expect(request.headers.value('Cookie'), isNull);
+        expect(request.headers.contentType?.mimeType, 'image/png');
+        final bytes = await request.fold<List<int>>([], (a, b) => a..addAll(b));
+        expect(bytes, [1, 2, 3]);
+        request.response.statusCode = 429;
+        request.response.headers.set('Retry-After', '12');
+        await request.response.close();
+      });
+      final response = await IoTransport().upload(
+        Uri.parse(
+          'http://127.0.0.1:${server.port}/api/v1/heatmap/screenshot?debug=true',
+        ),
+        'synthetic',
+        [1, 2, 3],
+        'image/png',
+      );
+      expect(response.status, 429);
+      expect(response.retryAfter, '12');
+    },
+  );
+  test('upload to a closed port is status 0, never an exception', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final port = server.port;
+    await server.close(force: true);
+    final response = await IoTransport().upload(
+      Uri.parse('http://127.0.0.1:$port/x'),
+      'k',
+      [1],
+      'image/png',
+    );
+    expect(response.status, 0);
+  });
 }

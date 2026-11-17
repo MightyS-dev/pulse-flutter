@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/backend.dart';
 import '../core/config.dart';
+import '../core/control_client.dart';
 import '../core/model.dart';
 import '../core/options.dart';
 import '../core/ports.dart';
@@ -12,6 +15,7 @@ import 'compression.dart';
 import 'computation.dart';
 import 'environment.dart';
 import 'file_storage.dart';
+import 'heatmap_hook.dart';
 import 'http_transport.dart';
 import 'lifecycle.dart';
 import 'live.dart';
@@ -32,18 +36,39 @@ PulseBackend createBackend() {
       compression: const IoCompression(),
       computation: const IsolateComputation(),
       environment: NativeEnvironment(),
+      heatmapDebugBuild: () => kDebugMode,
       log: debugPrint,
     ),
   );
 }
 
-class NativeBackend implements PulseBackend {
+class NativeBackend implements PulseBackend, ControlBackend {
   NativeBackend(this._release, this.runtime) {
-    _lifecycle = PulseLifecycle(runtime.backgroundSave);
+    _lifecycle = PulseLifecycle(
+      runtime.backgroundSave,
+      onForeground: (cold) => runtime.appForeground(cold: cold),
+      onBackground: runtime.appBackground,
+    );
+    try {
+      // First frame drawn: the end of the launch time of the first session.
+      unawaited(
+        WidgetsBinding.instance.waitUntilFirstFrameRasterized.then(
+          (_) => runtime.firstFrameRendered(),
+        ),
+      );
+    } catch (_) {
+      /* Without a binding the launch time runs to the first signal. */
+    }
   }
   final void Function() _release;
   final PulseRuntime runtime;
   late final PulseLifecycle _lifecycle;
+  late final HeatmapHook _heatmapHook = HeatmapHook(
+    runtime,
+    debugBuild: () => kDebugMode,
+  );
+  @override
+  ControlClient get control => runtime.control;
   @override
   bool get optOut => runtime.optOut;
   @override
@@ -52,10 +77,24 @@ class NativeBackend implements PulseBackend {
   Future<void> initialize(
     String key, {
     PulseOptions options = const PulseOptions(),
-  }) => runtime.initialize(key, options: options);
+  }) async {
+    await runtime.initialize(key, options: options);
+    _lifecycle.start();
+    if (options.captureHeatmaps) _heatmapHook.install();
+  }
+
   @override
   void track(String type, {num? value, Map<String, Object?>? props}) =>
       runtime.track(type, value: value, props: props);
+  @override
+  void trackError(
+    Object error,
+    StackTrace? stack,
+    Map<String, Object?>? props, {
+    required String kind,
+  }) => runtime.trackError(error, stack, props, kind: kind);
+  @override
+  void deepLink(Uri uri) => runtime.deepLink(uri);
   @override
   void setUser(String? identifier) => runtime.setUser(identifier);
   @override
@@ -63,6 +102,7 @@ class NativeBackend implements PulseBackend {
   @override
   Future<void> setOptOut(bool value) => runtime.setOptOut(value);
   Future<void> dispose() async {
+    _heatmapHook.dispose();
     _lifecycle.dispose();
     _release();
     await runtime.close();

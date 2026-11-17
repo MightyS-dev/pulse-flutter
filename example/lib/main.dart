@@ -45,6 +45,8 @@ class ExampleApp extends StatelessWidget {
       colorSchemeSeed: Colors.teal,
       brightness: Brightness.dark,
     ),
+    // One line shows the App Control screens (update required, maintenance ...).
+    builder: Pulse.control.builder,
     navigatorObservers: [Pulse.navigatorObserver],
     home: ExampleScreen(actions: actions, configured: configured),
   );

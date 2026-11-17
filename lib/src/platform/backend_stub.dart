@@ -35,6 +35,15 @@ class WebBackend implements PulseBackend {
   @override
   void track(String type, {num? value, Map<String, Object?>? props}) {}
   @override
+  void trackError(
+    Object error,
+    StackTrace? stack,
+    Map<String, Object?>? props, {
+    required String kind,
+  }) {}
+  @override
+  void deepLink(Uri uri) {}
+  @override
   void setUser(String? identifier) {}
   @override
   Future<void> flush() async {}

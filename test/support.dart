@@ -133,6 +133,31 @@ class FakeTransport implements PulseTransport {
         ));
   }
 
+  final uploads =
+      <({Uri url, String appKey, String contentType, List<int> bytes})>[];
+  final uploadReplies = <PulseResponse>[];
+  Future<PulseResponse> Function()? uploadHandler;
+  @override
+  Future<PulseResponse> upload(
+    Uri url,
+    String appKey,
+    List<int> bytes,
+    String contentType,
+  ) async {
+    uploads.add((
+      url: url,
+      appKey: appKey,
+      contentType: contentType,
+      bytes: List.of(bytes),
+    ));
+    return await (uploadHandler?.call() ??
+        Future.value(
+          uploadReplies.isEmpty
+              ? const PulseResponse(202)
+              : uploadReplies.removeAt(0),
+        ));
+  }
+
   final configRequests = <({Uri url, String key, String? etag})>[];
   PulseResponse? configReply;
   Future<PulseResponse> Function()? configHandler;
@@ -145,6 +170,16 @@ class FakeTransport implements PulseTransport {
     configRequests.add((url: url, key: appKey, etag: ifNoneMatch));
     return await (configHandler?.call() ??
         Future.value(configReply ?? const PulseResponse(404)));
+  }
+
+  final controlRequests = <({Uri url, String? etag})>[];
+  PulseResponse? controlReply;
+  Future<PulseResponse> Function()? controlHandler;
+  @override
+  Future<PulseResponse> fetchControl(Uri url, {String? ifNoneMatch}) async {
+    controlRequests.add((url: url, etag: ifNoneMatch));
+    return await (controlHandler?.call() ??
+        Future.value(controlReply ?? const PulseResponse(404)));
   }
 
   @override
@@ -162,6 +197,7 @@ class Harness {
     PulseEnvironment? environment,
     PulseLive? live,
     bool automatic = false,
+    bool Function()? debugBuild,
   }) : storage = storage ?? FakeStorage(),
        time = time ?? FakeTime() {
     runtime = PulseRuntime(
@@ -175,6 +211,7 @@ class Harness {
       live: live ?? const NoLive(),
       localTime: (value) => value,
       automaticSignals: automatic,
+      heatmapDebugBuild: debugBuild ?? () => false,
       log: (_) {},
     );
     if (initialize) {

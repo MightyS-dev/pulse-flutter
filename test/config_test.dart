@@ -101,10 +101,10 @@ void main() {
       expect(back.groups['device'], true);
     });
 
-    test('the group mapping holds 46 keys, each in one group', () {
+    test('the group mapping holds 51 keys, each in one group', () {
       final all = fieldGroups.values.expand((e) => e).toList();
-      expect(all.length, 46);
-      expect(all.toSet().length, 46);
+      expect(all.length, 51);
+      expect(all.toSet().length, 51);
       expect(all.contains('bundleId'), false);
     });
   });

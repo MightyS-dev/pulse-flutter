@@ -59,7 +59,11 @@ void main() {
       s.observer.didPush(_Page(null), _Page('/home'));
       expect(await s.sent(), [
         {'screen': '/home'},
-        {'screen': '_Page', 'previousScreen': '/home'},
+        {
+          'screen': '_Page',
+          'previousScreen': '/home',
+          'previousScreenSeconds': 0,
+        },
       ]);
     },
   );

@@ -68,7 +68,20 @@ class PulseResponse {
 abstract interface class PulseTransport {
   Future<PulseResponse> send(PulseRequest request);
 
+  /// POST of one raw image (heatmap debug screenshot) with the app key.
+  Future<PulseResponse> upload(
+    Uri url,
+    String appKey,
+    List<int> bytes,
+    String contentType,
+  );
+
   /// GET with the app key and an optional `If-None-Match` value.
   Future<PulseResponse> get(Uri url, String appKey, {String? ifNoneMatch});
+
+  /// GET of the App Control rules. Carries no app key and no identity: only
+  /// `Accept` and an optional `If-None-Match`. Gives up after 3 seconds to
+  /// connect and 5 seconds in all.
+  Future<PulseResponse> fetchControl(Uri url, {String? ifNoneMatch});
   void cancel();
 }

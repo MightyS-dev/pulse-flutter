@@ -29,6 +29,8 @@ class FileStorage implements PulseStorage {
           ? 65536
           : name == 'usage'
           ? 262144
+          : name.startsWith('control-')
+          ? 131072
           : 256 * 1024 * 1024 + 1;
       final length = await handle.length();
       if (length > maximum) {

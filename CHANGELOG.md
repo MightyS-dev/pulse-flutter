@@ -4,6 +4,20 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.7 - 2026-11-16
+
+- The built-in update and maintenance screens are not counted as app screens or taps.
+- Errors and crashes: unhandled errors are sent as `pulse.error` with the error type, a filtered message and readable frames (`Function file.dart:42`), so you see where it broke. The previous error handlers are kept and still run.
+- `Pulse.trackError(error, stack, props)` sends an error you handled yourself.
+- New options `captureErrors` (default true; false installs no handler) and `errorDetail` (`ErrorDetail.full` or `ErrorDetail.typeOnly`).
+- At most 10 errors per error type and session are sent.
+- New automatic data: `pulse.deep_link` (scheme, host and a path without ids, plus the three utm_ tags; report links with `Pulse.deepLink(uri)`), `pulse.app_opened` and `pulse.app_backgrounded` (only when the portal switches them on), `previousScreenSeconds` on screen views, and the system fields `launchMs`, `foregroundsToday` and `previousForegroundSeconds`.
+- The portal can pause types (`pausedSignals`) and switch on the opt-in ones (`enabledSignals`).
+- Guards: per session and type caps, 300 automatic signals per day, dropped ones counted once as `droppedAutomatic`.
+- Heatmaps: taps per screen as `pulse.heatmap` (off until the portal switches `heatmaps` on; new option `captureHeatmaps`, default true, can only switch it off). Position, kind (`tap`, `rage`), width class and orientation only: never text, inputs, the keyboard or recordings. A global pointer route watches taps without consuming or delaying them. `PulseHeatmapIgnore(child: ...)` keeps an area out. Debug builds (`kDebugMode`) upload one PNG per screen, width class, orientation and app version; release builds never send pictures.
+- App Control: require an update, suggest one or show maintenance, announcements and what's new from the portal. One line, `builder: Pulse.control.builder`, shows the built-in screens (Material on Android, Cupertino on iOS, 12 languages). `Pulse.control` offers `state`, `stream`, `checkNow()`, `openStore()`, `dismiss()`, `onOpenStore` and `theme`; the new option `control` is `ControlMode.automatic` (default), `manual` or `off`. It never blocks start-up, fails open and sends no identity.
+- Not in this package: notification and tracking permission status (no dependency exposes it without a prompt) and exit reasons (no native side).
+
 ## 0.9.6 - 2026-11-16
 
 - A signal that is dropped because its name or value is not valid no longer starts a session or keeps one alive.

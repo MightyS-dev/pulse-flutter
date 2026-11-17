@@ -25,6 +25,12 @@ class Capture {
     return _session!;
   }
 
+  /// The current session id when a signal at [now] would continue it, else null.
+  String? continuing(DateTime now) =>
+      _lastActivity != null && now.difference(_lastActivity!).inSeconds < 1800
+      ? _session
+      : null;
+
   void setUser(String? identifier) {
     userHash = identifier == null || identifier.isEmpty
         ? null

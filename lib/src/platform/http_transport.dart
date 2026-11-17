@@ -57,6 +57,64 @@ class IoTransport implements PulseTransport {
   }
 
   @override
+  Future<PulseResponse> upload(
+    Uri url,
+    String appKey,
+    List<int> bytes,
+    String contentType,
+  ) async {
+    final duration = timeout ?? Duration(seconds: 10 + bytes.length ~/ 16384);
+    final client = HttpClient()
+      ..connectionTimeout = duration
+      ..autoUncompress = false
+      ..userAgent = '${PulseInfo.sdkName}/${PulseInfo.version}';
+    _clients.add(client);
+    try {
+      return await _upload(
+        client,
+        url,
+        appKey,
+        bytes,
+        contentType,
+      ).timeout(duration);
+    } catch (_) {
+      return const PulseResponse(0);
+    } finally {
+      _clients.remove(client);
+      client.close(force: true);
+    }
+  }
+
+  Future<PulseResponse> _upload(
+    HttpClient client,
+    Uri url,
+    String appKey,
+    List<int> bytes,
+    String contentType,
+  ) async {
+    final request = await client.postUrl(url);
+    request.followRedirects = false;
+    request.headers.set('X-App-Key', appKey);
+    request.headers.set('Content-Type', contentType);
+    request.contentLength = bytes.length;
+    request.add(bytes);
+    final response = await request.close();
+    final after = response.headers.value('Retry-After');
+    final body = <int>[];
+    await for (final chunk in response) {
+      if (body.length + chunk.length > 65536) {
+        return PulseResponse(response.statusCode, retryAfter: after);
+      }
+      body.addAll(chunk);
+    }
+    return PulseResponse(
+      response.statusCode,
+      body: utf8.decode(body, allowMalformed: true),
+      retryAfter: after,
+    );
+  }
+
+  @override
   Future<PulseResponse> get(
     Uri url,
     String appKey, {
@@ -96,6 +154,53 @@ class IoTransport implements PulseTransport {
     await for (final chunk in response) {
       if (body.length + chunk.length > 65536) {
         return PulseResponse(response.statusCode);
+      }
+      body.addAll(chunk);
+    }
+    return PulseResponse(
+      response.statusCode,
+      body: utf8.decode(body, allowMalformed: true),
+    );
+  }
+
+  @override
+  Future<PulseResponse> fetchControl(Uri url, {String? ifNoneMatch}) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 3)
+      ..autoUncompress = false
+      ..userAgent = '${PulseInfo.sdkName}/${PulseInfo.version}';
+    _clients.add(client);
+    try {
+      return await _fetchControl(
+        client,
+        url,
+        ifNoneMatch,
+      ).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return const PulseResponse(0);
+    } finally {
+      _clients.remove(client);
+      client.close(force: true);
+    }
+  }
+
+  Future<PulseResponse> _fetchControl(
+    HttpClient client,
+    Uri url,
+    String? ifNoneMatch,
+  ) async {
+    final request = await client.getUrl(url);
+    request.followRedirects = false;
+    request.headers.set('Accept', 'application/json');
+    if (ifNoneMatch != null) {
+      request.headers.set('If-None-Match', ifNoneMatch);
+    }
+    final response = await request.close();
+    final body = <int>[];
+    await for (final chunk in response) {
+      if (body.length + chunk.length > 65536) {
+        // Larger than any valid answer: counts as a failure, never read.
+        return const PulseResponse(0);
       }
       body.addAll(chunk);
     }

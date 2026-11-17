@@ -275,6 +275,12 @@ void main() {
         'previousSessionSeconds',
         'averageSessionSeconds',
         'sessionSeconds',
+        'launchMs',
+        'foregroundsToday',
+        'previousForegroundSeconds',
+        'notificationPermission',
+        'trackingPermission',
+        'droppedAutomatic',
       };
       final h = Harness(
         automatic: true,

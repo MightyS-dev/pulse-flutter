@@ -27,6 +27,17 @@ class UsageStats {
   DateTime? _savedLast;
   bool dirty = false;
 
+  /// Foregrounds counted per local day, and the length of the last finished
+  /// foreground period. The running period is kept in memory only.
+  String? fgDay;
+  int fgCount = 0;
+  int? previousForeground;
+  DateTime? foregroundStart;
+
+  /// Automatic signals sent on one local day, for the daily cap.
+  String? autoDay;
+  int autoCount = 0;
+
   static const _keepDays = 90, _windowDays = 30, _maxDurations = 2000;
 
   /// Local calendar date as YYYY-MM-DD.
@@ -84,6 +95,44 @@ class UsageStats {
     _savedLast = now;
     dirty = true;
     return signals;
+  }
+
+  /// Counts a foreground at [now] and starts timing it. A foreground that is
+  /// already running is not counted twice: then false is returned.
+  bool foreground(DateTime now, DateTime Function(DateTime) local) {
+    if (foregroundStart != null) return false;
+    final day = dateOf(local(now));
+    fgCount = fgDay == day ? fgCount + 1 : 1;
+    fgDay = day;
+    foregroundStart = now;
+    dirty = true;
+    return true;
+  }
+
+  /// Ends the running foreground at [now] and returns its seconds, or null
+  /// when none was running.
+  int? background(DateTime now) {
+    final start = foregroundStart;
+    if (start == null) return null;
+    final seconds = now.difference(start).inSeconds;
+    final safe = seconds < 0 ? 0 : seconds;
+    previousForeground = safe;
+    foregroundStart = null;
+    dirty = true;
+    return safe;
+  }
+
+  /// Takes one automatic signal at [now] from the daily cap. False when the
+  /// cap of the local day is reached.
+  bool takeDaily(DateTime now, DateTime Function(DateTime) local, int cap) {
+    final day = dateOf(local(now));
+    if (autoDay != day) {
+      autoDay = day;
+      autoCount = 0;
+    }
+    if (autoCount >= cap) return false;
+    autoCount++;
+    return true;
   }
 
   void _closeOpen() {
@@ -160,6 +209,12 @@ class UsageStats {
       final sum = durations.fold<int>(0, (a, e) => a + e[1]);
       result['averageSessionSeconds'] = '${(sum / durations.length).round()}';
     }
+    if (fgDay == dateOf(local(now)) && fgCount > 0) {
+      result['foregroundsToday'] = '$fgCount';
+    }
+    if (previousForeground != null) {
+      result['previousForegroundSeconds'] = '$previousForeground';
+    }
     final start = openStart;
     if (start != null) {
       final seconds = now.difference(start).inSeconds;
@@ -186,6 +241,11 @@ class UsageStats {
             ],
       'version': lastVersion,
       'build': lastBuild,
+      'fgDay': fgDay,
+      'fgCount': fgCount,
+      'prevFg': previousForeground,
+      'autoDay': autoDay,
+      'autoCount': autoCount,
     }),
   );
 
@@ -207,7 +267,12 @@ class UsageStats {
         ]
         ..previous = (map['previous'] as num?)?.toInt()
         ..lastVersion = map['version'] as String?
-        ..lastBuild = map['build'] as String?;
+        ..lastBuild = map['build'] as String?
+        ..fgDay = _date(map['fgDay'])
+        ..fgCount = _count(map['fgCount'])
+        ..previousForeground = _optionalCount(map['prevFg'])
+        ..autoDay = _date(map['autoDay'])
+        ..autoCount = _count(map['autoCount']);
       final open = map['open'] as List<Object?>?;
       if (open != null) {
         stats.openStart = DateTime.fromMillisecondsSinceEpoch(
@@ -224,6 +289,11 @@ class UsageStats {
       return null;
     }
   }
+
+  static int? _optionalCount(Object? value) =>
+      value is num && value.isFinite && value >= 0 ? value.toInt() : null;
+
+  static int _count(Object? value) => _optionalCount(value) ?? 0;
 
   static String? _date(Object? value) =>
       value is String && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)

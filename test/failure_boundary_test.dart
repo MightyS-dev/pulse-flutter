@@ -9,6 +9,8 @@ import 'support.dart';
 
 class BrokenBackend implements PulseBackend {
   @override
+  void deepLink(Uri uri) => throw StateError('deepLink');
+  @override
   bool get optOut => throw StateError('getter');
   @override
   PulseConfig get config => throw StateError('config');
@@ -20,6 +22,13 @@ class BrokenBackend implements PulseBackend {
   @override
   void track(String type, {num? value, Map<String, Object?>? props}) =>
       throw StateError('track');
+  @override
+  void trackError(
+    Object error,
+    StackTrace? stack,
+    Map<String, Object?>? props, {
+    required String kind,
+  }) => throw StateError('trackError');
   @override
   void setUser(String? identifier) => throw StateError('setUser');
   @override
@@ -45,6 +54,7 @@ void main() {
           },
         );
         client.setUser('x' * 100000);
+        client.deepLink(Uri.parse('app://h/p'));
         expect(client.optOut, true);
         await client.flush();
         await client.setOptOut(false);

@@ -7,6 +7,13 @@ abstract interface class PulseBackend {
     PulseOptions options = const PulseOptions(),
   });
   void track(String type, {num? value, Map<String, Object?>? props});
+  void trackError(
+    Object error,
+    StackTrace? stack,
+    Map<String, Object?>? props, {
+    required String kind,
+  });
+  void deepLink(Uri uri);
   void setUser(String? identifier);
   Future<void> flush();
   Future<void> setOptOut(bool value);

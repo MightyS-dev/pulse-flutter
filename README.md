@@ -50,11 +50,11 @@ Sent with every signal: your signal name, optional number and properties, a UTC 
 | Settings and accessibility | colour scheme (light or dark), layout direction, time zone id (macOS and Linux), UTC offset, language, preferred language, region, text scale, content size category (iOS), reduce motion, bold text, invert colours, increase contrast |
 | Connection and power | connection type (wifi, cellular, ethernet, none, other), battery saver on or off |
 | App and install | app name, version and build number, package or bundle id, install source (appstore, testflight, playstore, galaxystore, amazon, sideload, debug, other), debug build flag, Dart version (for example `Dart 3.10.4`), SDK name and version |
-| Usage statistics | date of the first session, sessions so far, distinct days used (all time and last 30 days), previous session length, average session length, seconds since the session started, and `isNewInstall` during the first session |
+| Usage statistics | date of the first session, sessions so far, distinct days used (all time and last 30 days), previous session length, average session length, seconds since the session started, foregrounds today, length of the previous foreground period, the launch time of a cold start, and `isNewInstall` during the first session |
 
 Values that change while the app runs (orientation, colour scheme, text scale, accessibility settings, connection type, battery saver, UTC offset, screen size, session seconds) are read when each signal is captured, from cached state, without blocking. The rest is read once at start. The package or bundle id is sent unless you set `sendAppIdentity: false`.
 
-Usage statistics are kept in one small file named `usage` next to the install id in the app's own storage and are deleted together with it on opt-out.
+Usage statistics (including the foreground counters and the count of automatic signals sent today) are kept in one small file named `usage` next to the install id in the app's own storage and are deleted together with it on opt-out.
 
 Automatic signals: the SDK sends `pulse.session_started` when a new session begins (app start, or the first signal after 30 minutes of inactivity), `pulse.new_install` once on the first launch after install, and `pulse.app_updated` (with `previousVersion` and `previousBuild`) once when the app version or build number changes. They are one per session or rarer, follow opt-out and carry the same debug flag as your own signals.
 
@@ -97,7 +97,11 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
 | `sendAppIdentity` | true | Sends the package name as `system.bundleId`. Set false to leave it out. |
 | `appVersion` | from the platform | Overrides the app version. |
 | `automaticScreenViews` | true | Lets `Pulse.navigatorObserver` send screen views. Set false to switch them off. |
-| `automaticSignals` | true | Sends `pulse.session_started`, `pulse.new_install` and `pulse.app_updated`. Set false to switch them off. |
+| `automaticSignals` | true | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.deep_link` and, when the portal switches them on, `pulse.app_opened` and `pulse.app_backgrounded`. Set false to switch them off. |
+| `captureErrors` | true | Sends unhandled errors as `pulse.error`. Set false to install no error handler at all. |
+| `errorDetail` | `ErrorDetail.full` | `ErrorDetail.typeOnly` sends only the error type: no message and no frames. |
+| `control` | `ControlMode.automatic` | App Control: `automatic` checks and shows the built-in screens, `manual` checks and only keeps `Pulse.control.state` up to date, `off` makes no request. See [App Control](#app-control). |
+| `captureHeatmaps` | true | Follows the portal for tap heatmaps (off there until you switch it on). Set false to never capture taps. It can only switch capture off. See [Heatmaps](#heatmaps). |
 
 ## Screen views
 
@@ -114,14 +118,129 @@ MaterialApp(navigatorObservers: [Pulse.navigatorObserver], /* ... */);
 - Other screens: call `Pulse.screen('Name')`. It works with or without the observer and follows opt-out.
 - Switch off: `PulseOptions(automaticScreenViews: false)` makes the observer do nothing.
 
+## Automatic signals
+
+Types the SDK can send by itself: `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`, `pulse.deep_link`, `pulse.app_opened`, `pulse.app_backgrounded` and `pulse.heatmap`. Switch them off in code with `PulseOptions(automaticSignals: false)` (all of them except screen views), `automaticScreenViews: false` (the observer), `captureErrors: false` (error capture) and `captureHeatmaps: false` (tap heatmaps, see [Heatmaps](#heatmaps)); `Pulse.setOptOut(true)` stops everything. The portal can switch or pause each type, and `pulse.app_opened` and `pulse.app_backgrounded` are sent only when the portal turns them on (they are off by default). Defaults and how many signals each type uses: https://pulse.mightys.dev/docs/automatic-signals/
+
+What the new ones carry:
+
+- `pulse.app_opened`: prop `coldStart` (`"true"` for the first foreground of the process, else `"false"`). It is sent on a real change to the foreground (`AppLifecycleState.resumed`), once, and never for `inactive`.
+- `pulse.app_backgrounded`: prop `foregroundSeconds`. Sent when the app goes to `paused` or `hidden`. It never starts a session: when the last signal was 30 minutes or more ago it is dropped (the foreground counters below still update).
+- `pulse.deep_link`: props `scheme`, `host`, `path` (numeric and uuid-like segments become `:id`, at most 128 characters) and `utmSource`, `utmMedium`, `utmCampaign` when the link has those tags (filtered, at most 64 characters each). Never the rest of the query, the fragment, credentials or a port. Flutter has no single place that sees every link, so you report them: `Pulse.deepLink(uri)` from your router, `onGenerateInitialRoutes` or an `app_links` stream. It follows opt-out and the switches above.
+- `pulse.screen_view` gains `previousScreenSeconds` (whole seconds the previous screen was visible, time in the background excluded) on every view that has a `previousScreen`.
+
+Extra system fields (in the `usage` group, switchable from the portal): `launchMs`, `foregroundsToday` and `previousForegroundSeconds`.
+
+- `launchMs` is on the `pulse.session_started` of the first session of a process only. Flutter code cannot read the time the process started, so it measures from the `Pulse.initialize` call to the first rasterized frame (`WidgetsBinding.waitUntilFirstFrameRasterized`); when no frame was drawn yet by the time of the first signal, it runs to that signal. It does not include native engine start-up or the time before `initialize`, so call `initialize` early in `main`. Values over one hour are left out.
+- `foregroundsToday` counts foregrounds on the device's local day (the cold start counts). `previousForegroundSeconds` is the length of the last finished foreground period, kept across launches.
+
+Not available in this package, so not sent: `notificationPermission`, `trackingPermission` and with them `pulse.permission_changed`. None of the plugins this package uses can read those statuses, and the SDK never asks for a permission or adds a permission plugin. The portal switch for the `permissions` group exists for parity with the other SDKs and has no effect here.
+
+Guards: per session at most 20 of each of `pulse.app_opened` and `pulse.app_backgrounded`, 10 `pulse.deep_link` and 100 `pulse.screen_view`, and at most 300 automatic signals per install and local day. Dropped ones are counted and the count is sent once as the system field `droppedAutomatic` on the next signal. Your own signals and `pulse.error` are never limited by this.
+
+## Heatmaps
+
+Heatmaps show where people tap on each screen. They are off until you switch them on for the app in the portal, and the option `captureHeatmaps: false` keeps them off in code whatever the portal says. They need screen views (use `Pulse.navigatorObserver` or `Pulse.screen`), because every tap is filed under the current screen name, and a tap with no known screen is not captured. Automatic signals must stay on as well.
+
+What is collected: the screen name, where the tap landed (the share of the screen width and the distance from the top in logical pixels), the width class (phone below 600, tablet below 1024, else desktop), the orientation, and the kind: `tap`, or `rage` for the third and later tap within one second and 30 logical pixels. Taps are sent in batches as `pulse.heatmap` signals (at most 200 points each, at most 1000 per session) when the screen changes, the app goes to the background or `flush` runs.
+
+What is never collected: no text, no widget names or ids, no recordings, no screenshots in release builds. A tap is never captured while the on-screen keyboard is visible, on a text field (including password fields), while a text field has the focus, or inside a `PulseHeatmapIgnore`. A drag, a second finger and a secondary mouse button are not taps.
+
+The SDK only watches pointer events through one global pointer route. It never consumes or delays an event and it adds no widget to your tree.
+
+Keep an area out of the heatmap:
+
+```dart
+PulseHeatmapIgnore(child: AccountCard())
+```
+
+It has no visual effect and does not change hit testing for your widgets.
+
+Screenshots: so the portal can draw the taps over a picture of the screen, a debug build (`kDebugMode`, so `flutter run` and debug installs, never profile or release) uploads one PNG per screen, width class, orientation and app version, about one second after the screen appears and never while the keyboard is visible. The picture is taken from the root layer of the render tree and has its longest side scaled to at most 2048 pixels. It is sent at most 20 times per hour and a marker in the app's own storage stops a repeat. If it fails, nothing happens. Release builds never send pictures.
+
+The heatmap switch follows the newest settings the SDK reads from the portal during the run: switching heatmaps off stops capture at once and drops the taps not sent yet.
+
+## Errors and crashes
+
+By default the SDK sends unhandled errors as `pulse.error` signals, so you can see what broke and where:
+
+- What is captured: errors that reach `FlutterError.onError` and `PlatformDispatcher.instance.onError` (kind `error`). The handlers that were installed before are kept and called with the same arguments, and the result of the previous `PlatformDispatcher` handler is returned unchanged. Without one, the SDK returns false, so Flutter still logs the error as usual. Nothing is swallowed and the handlers never throw.
+- What is sent: the error type, a filtered message (at most 500 characters) and up to 30 frames, top first, each as `Function file.dart:42` (file name only, no directory). The whole error object is at most 16 KB.
+- The filter: emails, URLs (query and fragment), UUIDs, IP addresses, runs of 6 or more digits and directories of absolute paths are replaced or cut in the message and in every frame.
+- Type only: `PulseOptions(errorDetail: ErrorDetail.typeOnly)` sends just the type.
+- Handled errors: send an error you caught yourself with `Pulse.trackError(error, stack, {'screen': 'cart'})` (kind `handled`; the current stack is used when you give none). It works even when `captureErrors` is false.
+- Limits: at most 10 errors per error type and session are sent, so a loop cannot flood your quota. Opt-out stops capture.
+- Switch off: `PulseOptions(captureErrors: false)` installs no handler.
+- Symbolication: in a build made with `--split-debug-info` the frames are raw addresses (`#00 abs ...`). They are sent as they are and marked as not symbolicated, so they are not readable in the dashboard yet.
+
+```dart
+try {
+  await checkout();
+} catch (error, stack) {
+  Pulse.trackError(error, stack, {'step': 'payment'});
+}
+```
+
+## App Control
+
+Require an update, suggest one or put the app into maintenance from the Pulse portal, without releasing a new build. Add one line to your app:
+
+```dart
+MaterialApp(
+  builder: Pulse.control.builder, // shows the App Control screens above your app
+  home: const Home(),
+)
+```
+
+It fits `CupertinoApp` and `WidgetsApp` too (`builder` has the signature of `TransitionBuilder`). The screens are: a full screen for a required update, a blocked version and maintenance; a dialog for a suggested update; a card for an announcement or what's new; and a bar for a maintenance window that starts soon. They follow your theme (light and dark), the text size of the device and the language of your app (12 languages built in), use Material on Android and a Cupertino look on iOS, and read out properly with a screen reader. Colors, shape and text styles can be changed:
+
+```dart
+Pulse.control.theme = const PulseControlTheme(accentColor: Color(0xFF0B6E4F));
+```
+
+This package has no native code and opens no links itself, so tell it how to open the store page. With `url_launcher` in your app:
+
+```dart
+Pulse.control.onOpenStore = (url) =>
+    launchUrl(url, mode: LaunchMode.externalApplication);
+```
+
+Without `onOpenStore` the built-in screens show no Update button, and a required update is shown as a suggestion that can be dismissed: there is always a way out.
+
+Draw your own screens instead with `PulseOptions(control: ControlMode.manual)`:
+
+```dart
+Pulse.control.stream.listen((state) {
+  if (state.kind == ControlKind.updateRequired) {
+    // state.title, state.body, state.buttonText, state.url ...
+  }
+});
+// Pulse.control.state, Pulse.control.checkNow(), Pulse.control.openStore(), Pulse.control.dismiss()
+```
+
+`PulseOptions(control: ControlMode.off)` makes no request at all and the state is always `ControlKind.normal`.
+
+For App Store review: the rules never apply to a version newer than the one in the store, so a build in review is not blocked by a minimum you set for the released version. In a debug build every locking screen shows a "Test build" bar and a Continue button.
+
+How it fails safely:
+
+- `Pulse.initialize` never waits for App Control and your first frame never waits for it either.
+- The rules are read in the background once after start and again when the app returns to the foreground, at most once a minute, with 3 seconds to connect and 5 seconds in all. There is no retry loop.
+- Any failure (no network, an error answer, an answer that is not valid, larger than 64 KiB or of another format) keeps the last known state from the cache, or normal. Never a lock from the unknown.
+- A locking rule from a cache older than 30 days is ignored, and a cached maintenance never lasts past its end or 72 hours after its start.
+- If the store version is not newer than the installed one, or the user pressed Update three times and came back on the same version, a required update becomes a suggestion.
+- The app is never closed by App Control, and there is no Exit button.
+- The request carries no key and no identity (not even the app key) and App Control keeps working when analytics is opted out.
+
 ## Settings from the portal
 
 The portal can switch these off for your app without a package update:
 
-- screen views, and all automatic signals (`pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`), or any one of those types
-- the field groups device, screen, settings, network, app and usage (the basic platform, version, locale, SDK and bundle id fields are always sent)
+- screen views, and all automatic signals (`pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`, `pulse.deep_link`), or any one of those types; pause a type (the server does this near the plan limit); switch on `pulse.app_opened` and `pulse.app_backgrounded`
+- heatmaps (`pulse.heatmap`, off by default), and the type itself
+- the field groups device, screen, settings, network, app, usage and permissions (the basic platform, version, locale, SDK and bundle id fields are always sent)
 
-Once per launch the SDK reads the settings in the background (it never delays `initialize`, `track` or `flush`) and keeps them in its own storage. A change applies from the next launch and stays the same for the whole run. Everything is on when the settings cannot be read: no network, an error, an unreadable answer, or none stored yet. Opt-out deletes the stored settings.
+Once per launch the SDK reads the settings in the background (it never delays `initialize`, `track` or `flush`) and keeps them in its own storage. A change applies from the next launch and stays the same for the whole run, except the heatmap switch, which follows the newest settings at once. Everything is on when the settings cannot be read: no network, an error, an unreadable answer, or none stored yet. Opt-out deletes the stored settings.
 
 The options `automaticScreenViews` and `automaticSignals` can only switch things off as well. Setting them to true never turns on what the portal switched off, and `Pulse.screen` also sends nothing when the portal switched screen views off.
 
