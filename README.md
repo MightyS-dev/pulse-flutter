@@ -39,6 +39,13 @@ await Pulse.flush();                  // waits until queued signals are delivere
 
 Public calls never throw into your app and never block the main thread. Calls made before `initialize` finishes are kept (up to 100) and sent afterwards. A second `initialize` is ignored.
 
+## See your first signal
+
+1. Sign in at [app.pulse.mightys.dev](https://app.pulse.mightys.dev) and open the app whose key you used.
+2. A debug or development build sends test data (see Test mode below). Turn on the **Test mode** switch in the bar
+   above the figures to see it; turn it off again for real users.
+3. Open **Live** in the app menu: signals appear there as they arrive. The Overview and the other screens follow shortly.
+
 ## What is sent and what is never sent
 
 Sent with every signal: your signal name, optional number and properties, a UTC timestamp, the debug flag, a random session id, and the device, app and settings values below. A value the platform cannot give is left out, never guessed. Nothing needs to be set up for any of it.
@@ -97,7 +104,7 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(
 | `sendAppIdentity` | true | Sends the package name as `system.bundleId`. Set false to leave it out. |
 | `appVersion` | from the platform | Overrides the app version. |
 | `automaticScreenViews` | true | Lets `Pulse.navigatorObserver` send screen views. Set false to switch them off. |
-| `automaticSignals` | true | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.deep_link` and, when the portal switches them on, `pulse.app_opened` and `pulse.app_backgrounded`. Set false to switch them off. |
+| `automaticSignals` | true | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.deep_link`, `pulse.app_backgrounded` and, when the portal switches it on, `pulse.app_opened`. Set false to switch them off. |
 | `captureErrors` | true | Sends unhandled errors as `pulse.error`. Set false to install no error handler at all. |
 | `errorDetail` | `ErrorDetail.full` | `ErrorDetail.typeOnly` sends only the error type: no message and no frames. |
 | `control` | `ControlMode.automatic` | App Control: `automatic` checks and shows the built-in screens, `manual` checks and only keeps `Pulse.control.state` up to date, `off` makes no request. See [App Control](#app-control). |
@@ -120,12 +127,23 @@ MaterialApp(navigatorObservers: [Pulse.navigatorObserver], /* ... */);
 
 ## Automatic signals
 
-Types the SDK can send by itself: `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`, `pulse.deep_link`, `pulse.app_opened`, `pulse.app_backgrounded` and `pulse.heatmap`. Switch them off in code with `PulseOptions(automaticSignals: false)` (all of them except screen views), `automaticScreenViews: false` (the observer), `captureErrors: false` (error capture) and `captureHeatmaps: false` (tap heatmaps, see [Heatmaps](#heatmaps)); `Pulse.setOptOut(true)` stops everything. The portal can switch or pause each type, and `pulse.app_opened` and `pulse.app_backgrounded` are sent only when the portal turns them on (they are off by default). Defaults and how many signals each type uses: https://pulse.mightys.dev/docs/automatic-signals/
+Types the SDK can send by itself: `pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`, `pulse.deep_link`, `pulse.app_opened`, `pulse.app_backgrounded` and `pulse.heatmap`. Switch them off in code with `PulseOptions(automaticSignals: false)` (all of them except screen views), `automaticScreenViews: false` (the observer), `captureErrors: false` (error capture) and `captureHeatmaps: false` (tap heatmaps, see [Heatmaps](#heatmaps)); `Pulse.setOptOut(true)` stops everything. The portal can switch or pause each type. `pulse.app_backgrounded` is on by default; `pulse.app_opened` is off until the portal turns it on. Defaults and how many signals each type uses: https://pulse.mightys.dev/docs/automatic-signals/
+
+| Type | Default | Plan usage |
+| --- | --- | --- |
+| `pulse.session_started` | On | Free automatic signal, does not count toward your plan |
+| `pulse.app_opened` | Off, portal opt in | Free automatic signal, does not count toward your plan |
+| `pulse.app_backgrounded` | On | Free automatic signal, does not count toward your plan |
+| `pulse.new_install` | On | Free automatic signal, does not count toward your plan |
+| `pulse.app_updated` | On | Free automatic signal, does not count toward your plan |
+| `pulse.screen_view` | On through the navigator observer | Counts toward your plan |
+| `pulse.deep_link` | On when reported with `Pulse.deepLink` | Counts toward your plan |
+| `pulse.heatmap` | Off, portal opt in | Counts toward your plan |
 
 What the new ones carry:
 
 - `pulse.app_opened`: prop `coldStart` (`"true"` for the first foreground of the process, else `"false"`). It is sent on a real change to the foreground (`AppLifecycleState.resumed`), once, and never for `inactive`.
-- `pulse.app_backgrounded`: prop `foregroundSeconds`. Sent when the app goes to `paused` or `hidden`. It never starts a session: when the last signal was 30 minutes or more ago it is dropped (the foreground counters below still update).
+- `pulse.app_backgrounded`: prop `foregroundSeconds` and system field `sessionSeconds` (seconds since the session started, when the usage group is on). Sent once when the app goes to `hidden` or `paused`, followed by an immediate flush. The session end is saved first, even if the signal is switched off or cannot be delivered, so the next launch reports the real `previousSessionSeconds`. An unfinished flush leaves the signal on disk for the next launch with its original timestamp. It never starts a session: when the last signal was 30 minutes or more ago it is dropped (the stored end and foreground counters still update).
 - `pulse.deep_link`: props `scheme`, `host`, `path` (numeric and uuid-like segments become `:id`, at most 128 characters) and `utmSource`, `utmMedium`, `utmCampaign` when the link has those tags (filtered, at most 64 characters each). Never the rest of the query, the fragment, credentials or a port. Flutter has no single place that sees every link, so you report them: `Pulse.deepLink(uri)` from your router, `onGenerateInitialRoutes` or an `app_links` stream. It follows opt-out and the switches above.
 - `pulse.screen_view` gains `previousScreenSeconds` (whole seconds the previous screen was visible, time in the background excluded) on every view that has a `previousScreen`.
 
@@ -236,7 +254,7 @@ How it fails safely:
 
 The portal can switch these off for your app without a package update:
 
-- screen views, and all automatic signals (`pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.screen_view`, `pulse.deep_link`), or any one of those types; pause a type (the server does this near the plan limit); switch on `pulse.app_opened` and `pulse.app_backgrounded`
+- screen views, and all automatic signals (`pulse.session_started`, `pulse.new_install`, `pulse.app_updated`, `pulse.app_backgrounded`, `pulse.screen_view`, `pulse.deep_link`), or any one of those types; pause a type; switch on `pulse.app_opened`
 - heatmaps (`pulse.heatmap`, off by default), and the type itself
 - the field groups device, screen, settings, network, app, usage and permissions (the basic platform, version, locale, SDK and bundle id fields are always sent)
 
@@ -266,7 +284,8 @@ await Pulse.initialize('YOUR_APP_KEY', options: const PulseOptions(debug: true))
 
 ## Requirements
 
-- Android and iOS (the connection type and battery saver values come from the `connectivity_plus` and `battery_plus` plugins; the Android merge adds the normal `ACCESS_NETWORK_STATE` permission)
+- Android and iOS, the main targets. Windows desktop builds send signals too (tested with debug builds); macOS and Linux
+  desktop are not tested yet. Flutter web is not supported. (On Android and iOS the connection type and battery saver values come from the `connectivity_plus` and `battery_plus` plugins; the Android merge adds the normal `ACCESS_NETWORK_STATE` permission)
 - Dart 3.10 or newer, Flutter 3.38.1 or newer
 
 Supported plugin versions. The SDK works with any version in these ranges, so your app can keep the older plugin majors it already uses:

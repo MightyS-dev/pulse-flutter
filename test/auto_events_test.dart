@@ -1,7 +1,9 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mightys_pulse/src/core/config.dart';
 import 'package:mightys_pulse/src/core/options.dart';
+
 import 'support.dart';
 
 Map<String, Object?> systemOf(Map<String, Object?> e) =>
@@ -66,12 +68,12 @@ void main() {
     test('allows: opt-in types need enabledSignals, paused types are off', () {
       const none = PulseConfig();
       expect(none.allows(opened), false);
-      expect(none.allows(backgrounded), false);
+      expect(none.allows(backgrounded), true);
       expect(none.allows('pulse.deep_link'), true);
       expect(none.allows('pulse.permission_changed'), true);
       final on = PulseConfig.parse(config(enabled: [opened]))!;
       expect(on.allows(opened), true);
-      expect(on.allows(backgrounded), false);
+      expect(on.allows(backgrounded), true);
       final paused = PulseConfig.parse(
         config(enabled: [opened], paused: [opened, 'pulse.screen_view']),
       )!;
@@ -86,13 +88,13 @@ void main() {
         config(enabled: [backgrounded, opened], paused: ['pulse.deep_link']),
       )!;
       final again = PulseConfig.parse(utf8.decode(c.encode()))!;
-      expect(again.enabledSignals, {opened, backgrounded});
+      expect(again.enabledSignals, {opened});
       expect(again.pausedSignals, {'pulse.deep_link'});
     });
   });
 
   group('app opened and backgrounded', () {
-    test('not sent without a cached config that lists them', () async {
+    test('opened stays opt in and background never opens a session', () async {
       final h = launch();
       h.runtime.appForeground(cold: true);
       h.runtime.appBackground();
@@ -425,7 +427,9 @@ void main() {
 
   group('quota guards', () {
     test('20 app_opened per session, the drop count is sent once', () async {
-      final h = launch(settings: config(enabled: [opened]));
+      final h = launch(
+        settings: config(enabled: [opened], disabled: [backgrounded]),
+      );
       for (var i = 0; i < 25; i++) {
         h.runtime.appBackground();
         h.runtime.appForeground(cold: false);

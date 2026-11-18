@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'heatmap.dart';
 import 'screen_views.dart';
 
@@ -17,7 +18,7 @@ const permissionChangedType = 'pulse.permission_changed';
 
 /// Automatic types that are sent only when the cached portal settings list
 /// them in `enabledSignals`.
-const optInSignalTypes = {appOpenedType, appBackgroundedType};
+const optInSignalTypes = {appOpenedType};
 const automaticSignalTypes = {
   sessionStartedType,
   newInstallType,
@@ -30,7 +31,7 @@ const automaticSignalTypes = {
 };
 
 /// Types the portal can disable or pause: the automatic ones and
-/// `pulse.heatmap` (which has its own switch and no AE1 quota).
+/// `pulse.heatmap` (which has its own switch and separate limits).
 const configurableSignalTypes = {...automaticSignalTypes, heatmapType};
 
 /// Field groups and the `system` keys each one owns. The base system keys

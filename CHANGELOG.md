@@ -4,6 +4,10 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.8 - 2026-11-18
+
+- Session length: the SDK reports when the app goes to the background, so sessions show their real length. `pulse.app_backgrounded` is on by default and does not count toward your plan.
+
 ## 0.9.7 - 2026-11-16
 
 - The built-in update and maintenance screens are not counted as app screens or taps.

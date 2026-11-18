@@ -7,7 +7,7 @@ import 'package:mightys_pulse/src/core/control_rules.dart';
 import 'package:mightys_pulse/src/core/control_texts.dart';
 import 'package:mightys_pulse/src/core/control_version.dart';
 
-/// The four shared tables are part of the private tree only. Where they are
+/// The four shared tables are optional test fixtures. Where they are
 /// not bundled these tests skip, visibly.
 const _dir = 'test/fixtures/control-v1';
 final _present = File('$_dir/version-cases.json').existsSync();

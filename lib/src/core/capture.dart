@@ -9,6 +9,9 @@ class Capture {
   DateTime? _lastActivity;
   String? userHash;
 
+  /// Whether this process has started a session, including a quiet one.
+  bool get hasSession => _session != null;
+
   /// Hash of the anonymous install id, used while no user is set.
   String? installHash;
 

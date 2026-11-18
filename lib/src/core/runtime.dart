@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'advice.dart';
 import 'auto_events.dart';
 import 'backend.dart';
@@ -115,7 +116,7 @@ class PulseRuntime implements PulseBackend, ControlBackend, HeatmapSink {
   @override
   bool get optOut => _optOut;
 
-  // Heatmaps (H1): taps per screen, folded into pulse.heatmap signals.
+  // Taps per screen, folded into pulse.heatmap signals.
   late final HeatmapCapture _heatmap = HeatmapCapture(
     clock: clock,
     enabled: _heatmapAllowed,
@@ -656,8 +657,9 @@ class PulseRuntime implements PulseBackend, ControlBackend, HeatmapSink {
   }
 
   /// The app went to the background. Ends the foreground period, and sends
-  /// `pulse.app_backgrounded` when the portal listed it and a session is
-  /// running (it never starts one). Never throws.
+  /// `pulse.app_backgrounded` unless switched off and while a session is
+  /// running (it never starts one). The session end is saved even when the
+  /// signal cannot be sent. The lifecycle's backgroundSave flushes it.
   void appBackground() {
     try {
       final at = clock.now;
@@ -670,7 +672,10 @@ class PulseRuntime implements PulseBackend, ControlBackend, HeatmapSink {
         await _ensureUsage();
         if (_optOut) return;
         final seconds = _usage!.background(at);
-        if (seconds == null || !_autoEnabled(appBackgroundedType)) return;
+        if (seconds == null) return;
+        if (_capture.hasSession) _usage!.touch(at);
+        await _saveUsage(force: true);
+        if (!_autoEnabled(appBackgroundedType)) return;
         if (_capture.continuing(at) == null) return;
         await _admit(at, snapshot, appBackgroundedType, {
           'foregroundSeconds': seconds,
@@ -900,7 +905,7 @@ class PulseRuntime implements PulseBackend, ControlBackend, HeatmapSink {
   ]) {
     final isHeatmap = type == heatmapType;
     // Heatmaps were checked against the newest settings before they were
-    // queued, and no AE1 cap counts them.
+    // queued, and the automatic signal caps do not count them.
     if (!isHeatmap && !_config.allows(type)) {
       return;
     }

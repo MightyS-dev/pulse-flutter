@@ -37,7 +37,7 @@ extension _Heat on PulseRuntime {
       _capture.continuing(at) ?? HeatmapCapture.pendingSession;
 
   /// Queues one buffer as a `pulse.heatmap` signal. It follows the normal
-  /// session rule at its own timestamp; the AE1 caps do not count it.
+  /// session rule at its own timestamp; automatic signal caps do not count it.
   void _emitHeatmap(Map<String, Object?> payload) {
     final at = clock.now;
     final snapshot = _liveAt(at);
